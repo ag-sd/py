@@ -113,13 +113,11 @@ class RoboGUI(QWidget):
 
     def run_test(self):
         command = self.get_parameters(self)
-        command += " /L"
-        # subprocess.check_call(command, shell=False)
-        # os.system("start /wait cmd /c {%s}" % command)
-        # subprocess.Popen("start /wait cmd /c {%s}" % command).wait()
+        command += ' /L'
+        os.system('start /wait powershell -NoProfile -NoExit -Command "%s"' %command)
 
     def get_parameters(self, parent):
-        command = 'cmd.exe robocopy '
+        command = 'robocopy '
         source = self.get_path("Source Directory", parent)
         if not source:
             return
