@@ -10,6 +10,6 @@ Switches can be setup by reading a friendly description of what each of them doe
 - Support to log to file along with screen display
 
 ### TO-DO
-- Ability to save and load projects
-- Maintain a list of sessions currently in progress
-- UI/UX configuration
+- [ ] Ability to save and load projects
+- [ ] Maintain a list of sessions currently in progress
+- [ ] UI/UX configuration
