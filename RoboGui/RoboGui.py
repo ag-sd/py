@@ -1,6 +1,4 @@
 import sys
-import subprocess
-import os
 
 from PyQt5.QtWidgets import (QWidget,
                              QApplication,
@@ -16,7 +14,8 @@ from PyQt5.QtWidgets import (QWidget,
                              QMessageBox)
 
 from CustomUI import FileChooser
-from RobocopySwitchDictionary import allOptions
+from RobocopySwitches import allSwitches
+from Utils import CommandRunner
 
 
 class RoboGUI(QWidget):
@@ -27,14 +26,15 @@ class RoboGUI(QWidget):
     def initUI(self):
 
         test_button = QPushButton("Preview")
+        test_button.clicked.connect(self.run_test)
         exec_button = QPushButton("Start!!")
+        exec_button.clicked.connect(self.run_exec)
         # save_button = QPushButton("Save")
 
         btnLayout = QHBoxLayout()
         btnLayout.addStretch()
         # btnLayout.addWidget(save_button)
         btnLayout.addWidget(test_button)
-        test_button.clicked.connect(self.run_test)
         btnLayout.addWidget(exec_button)
 
         layout = QVBoxLayout()
@@ -67,7 +67,7 @@ class RoboGUI(QWidget):
 
     @staticmethod
     def setup_ui_from_options(key):
-        key_options = allOptions[key]
+        key_options = allSwitches[key]
         check = 0
         entry = 0
         checkgrid = QGridLayout()
@@ -79,7 +79,7 @@ class RoboGUI(QWidget):
             if option.find(":n") > 0:
                 # Text Box
                 widget = QLineEdit()
-                width = widget.fontMetrics().boundingRect("999").width() + 12
+                width = widget.fontMetrics().boundingRect("9999").width() + 12
                 widget.setMaximumWidth(width)
                 container = QHBoxLayout()
                 container.addWidget(widget)
@@ -112,9 +112,14 @@ class RoboGUI(QWidget):
         return panel
 
     def run_test(self):
-        command = self.get_parameters(self)
-        command += ' /L'
-        os.system('start /wait powershell -NoProfile -NoExit -Command "%s"' %command)
+        executor = CommandRunner("Preview of changes to be made")
+        cmd = self.get_parameters(self) + ' /L'
+        executor.execute_wait(cmd)
+
+    def run_exec(self):
+        cmd = self.get_parameters(self)
+        executor = CommandRunner(cmd)
+        executor.execute_wait(cmd)
 
     def get_parameters(self, parent):
         command = 'robocopy '

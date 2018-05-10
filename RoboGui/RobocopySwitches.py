@@ -1,4 +1,4 @@
-allOptions = {
+allSwitches = {
     "Source": {
         "/S": "Copy Sub folders",
         "/E": "Copy Subfolders, including Empty Subfolders.",
