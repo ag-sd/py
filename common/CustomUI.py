@@ -18,22 +18,22 @@ class FileChooser(QWidget):
         self.cue = cue
         self.dir = _dir
         self.selection = ''
+        self.text = QLineEdit()
         self.lbl_align_right = lbl_align_right
         self.setLayout(self.get_layout())
 
     def get_layout(self):
-        text = QLineEdit()
-        text.setReadOnly(True)
-        text.setObjectName("txtAddress")
+        self.text.setReadOnly(True)
+        self.text.setObjectName("txtAddress")
         button = QPushButton("...")
-        button.clicked.connect(lambda: self.browse_for_item(text))
+        button.clicked.connect(lambda: self.browse_for_item(self.text))
         width = button.fontMetrics().boundingRect("...").width() + 12
         button.setMaximumWidth(width)
-        button.setMaximumHeight(text.height())
+        button.setMaximumHeight(self.text.height())
         layout = QHBoxLayout()
         if not self.lbl_align_right:
             layout.addWidget(QLabel(self.label))
-        layout.addWidget(text)
+        layout.addWidget(self.text)
         layout.addWidget(button)
         if self.lbl_align_right:
             layout.addWidget(QLabel(self.label))
@@ -51,6 +51,10 @@ class FileChooser(QWidget):
 
     def getSelection(self):
         return self.selection
+
+    def setSelection(self, selection):
+        self.selection = selection
+        self.text.setText(selection)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
