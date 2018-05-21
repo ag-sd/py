@@ -114,12 +114,12 @@ class RoboGUI(QWidget):
     def run_test(self):
         executor = CommandRunner("Preview of changes to be made")
         cmd = self.get_parameters(self) + ' /L'
-        #executor.execute_wait(cmd)
+        executor.execute_wait(cmd)
 
     def run_exec(self):
         cmd = self.get_parameters(self)
         executor = CommandRunner(cmd)
-        #executor.execute_wait(cmd)
+        executor.execute_wait(cmd)
 
     def get_parameters(self, parent):
         command = 'robocopy '

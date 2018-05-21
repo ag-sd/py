@@ -1,5 +1,5 @@
 import unittest
-import CustomUI
+from common.CustomUI import FileChooser
 from PyQt5.QtWidgets import (QLineEdit, QLabel, QApplication)
 
 
@@ -7,7 +7,7 @@ class TestCustomUI(unittest.TestCase):
 
     def setUp(self):
         self.app = QApplication([])
-        self.testWidget = CustomUI.FileChooser("Test Label", "Test Cue", True)
+        self.testWidget = FileChooser("Test Label", "Test Cue", True)
 
     def tearDown(self):
         self.app.quit()
