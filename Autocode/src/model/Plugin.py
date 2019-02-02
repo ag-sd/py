@@ -1,9 +1,11 @@
 import yaml
 
+
 class Executable:
     def __init__(self, executable, description):
         self.executable = executable
         self.description = description
+
 
 class Plugin:
     def __init__(self, plugin_yaml):
