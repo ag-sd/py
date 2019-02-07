@@ -5,7 +5,7 @@ Imageplay lets you run a slide-show of a collection of images. The slide-show ru
 * Drag and drop images to start a slide-show
 
 ### TO-DO
-- [ ] Drag and drop images to start a slide-show
+- [X] Drag and drop images to start a slide-show
 - [ ] Choose a folder as image source
 - [ ] Play GIF images frame-by-frame
 - [ ] Play in Order / Random. 
@@ -18,3 +18,4 @@ Imageplay lets you run a slide-show of a collection of images. The slide-show ru
 - [ ] Unit Tests
 
 ### Changelog
+Wed Feb  6 23:55:27 EST 2019 Initial commit of the code
