@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QAbstractTableModel, QVariant, Qt, QModelIndex, pyqtSignal
+from PyQt5.QtCore import QAbstractTableModel, QVariant, Qt, QModelIndex
 
 
 class FileItemModel(QAbstractTableModel):

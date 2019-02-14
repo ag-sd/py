@@ -3,20 +3,21 @@ import sys
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QApplication,
-                             QMainWindow, QSplitter, QLabel)
+                             QMainWindow, QSplitter)
 
 import Imageplay
-from Imageplay.ImageView import ImageView
-from Imageplay.PlayList import PlayList
+from Imageplay.src.ImageView import ImageView
+from Imageplay.src.PlayList import PlayList
 
 
 class ImagePlayApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        # self.image_view = QLabel("Foooos")
         self.playlist = PlayList()
         self.imageView = ImageView()
         self.playlist.image_change_event.connect(self.image_changed)
+        self.imageView.animation_started.connect(self.playlist.animation_started)
+        self.imageView.animation_stopped.connect(self.playlist.animation_stopped)
         self.initUI()
         self.show()
 
