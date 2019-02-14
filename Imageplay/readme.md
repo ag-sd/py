@@ -5,11 +5,11 @@ Imageplay lets you run a slide-show of a collection of images. The slide-show ru
 * Drag and drop images to start a slide-show
 
 ### TO-DO
-- [X] Drag and drop images to start a slide-show
+- [x] Drag and drop images to start a slide-show
 - [ ] Choose a folder as image source
 - [x] Play GIF images frame-by-frame
-- [ ] Play in Order / Random. 
-- [ ] Loop / Stop at end of list
+- [x] Play in Order / Random. 
+- [x] Loop / Stop at end of list
 - [ ] Crop images
 - [ ] Display image properties
 - [ ] Search Tools // TODO-Flesh out
