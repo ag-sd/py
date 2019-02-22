@@ -1,4 +1,7 @@
-from PyQt5.QtCore import QAbstractTableModel, QVariant, Qt, QModelIndex
+from os import path
+
+from PyQt5.QtCore import QAbstractTableModel, QVariant, Qt, QModelIndex, QFileInfo
+from PyQt5.QtWidgets import QFileIconProvider
 
 
 class FileItemModel(QAbstractTableModel):
@@ -19,16 +22,17 @@ class FileItemModel(QAbstractTableModel):
             return QVariant()
         if role == Qt.DisplayRole:
             item = self.file_items[index.row()]
-            if index.column() < len(self.columnHeaders):
-                return item[index.column()]
+            if index.column() == 0:
+                return item.absolutePath()
+            elif index.column() == 1:
+                return item.fileName()
             else:
                 return QVariant()
 
         elif role == Qt.DecorationRole:
-            # item = self.file_items[index.row()]
-            # if index.column() == 0:
-            #     return QFileIconProvider().icon(item.file_info)
-            print("TODO-Sheldon - Generate Image thumbnails - in a separate thread")
+            item = self.file_items[index.row()]
+            if index.column() == 0:
+                return QFileIconProvider().icon(item)
 
     def headerData(self, p_int, orientation, role=None):
         if role == Qt.DisplayRole:
@@ -37,10 +41,11 @@ class FileItemModel(QAbstractTableModel):
             elif orientation == Qt.Vertical:
                 return p_int
 
-    def append_row(self, file_dir, file_name):
+    def append_rows(self, files):
         last_index = len(self.file_items)
-        self.beginInsertRows(QModelIndex(), last_index, last_index + 1)
-        self.file_items.append((file_dir, file_name))
+        self.beginInsertRows(QModelIndex(), last_index, last_index + len(files))
+        for file in files:
+            self.file_items.append(QFileInfo(file))
         self.endInsertRows()
 
     def update_view(self, index):

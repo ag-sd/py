@@ -1,12 +1,12 @@
 import unittest
 
-from PlayList import CircularLRUQueue
+from model.History import BoundedLRUQueue, InfiniteHistoryStack
 
 
-class TestCircularLRUQueue(unittest.TestCase):
+class TestBoundedLRUQueue(unittest.TestCase):
 
     def setUp(self):
-        self.queue = CircularLRUQueue(5)
+        self.queue = BoundedLRUQueue(5)
 
     def testCreateNewOrderedNoLoop(self):
         for i in range(0, 5):
@@ -18,6 +18,18 @@ class TestCircularLRUQueue(unittest.TestCase):
             for j in range(0, 5):
                 _next = self.queue.next(False)
                 self.assertEqual(j, _next)
+
+    def testCreateNewOrderedPrev(self):
+        for i in range(0, 5):
+            _next = self.queue.next(False)
+            self.assertEqual(i, _next)
+
+        for j in range(4, -1, -1):
+            self.assertEqual(j, self.queue.prev())
+
+        for i in range(0, 5):
+            _next = self.queue.next(False)
+            self.assertEqual(i, _next)
 
     def testCreateNewRandomNoLoop(self):
         prev = []

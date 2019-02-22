@@ -1,125 +1,164 @@
-import random
 from os import path
 
-from PyQt5 import QtCore, QtGui
+from PyQt5 import QtCore
 from PyQt5.QtCore import pyqtSignal, Qt
-from PyQt5.QtWidgets import QTableView, QAbstractItemView, QMenu, QAction
+from PyQt5.QtGui import QImageReader
+from PyQt5.QtWidgets import QTableView, QAbstractItemView, QAction, QVBoxLayout, QWidget, QToolBar, \
+    QSizePolicy
 
+import Imageplay
+from CommonUtils import FileScanner
 from Imageplay.src.model.FileItemModel import FileItemModel
+from SettingsDialog import SettingsDialog
+from model.Animation import AnimationHandler
+from model.History import InfiniteHistoryStack
 
 
-class CircularLRUQueue:
-    def __init__(self, size):
-        self.size = size
-        self.queue = []
+class PlayListController(QWidget):
 
-    def enqueue(self, item=-1):
-        if len(self.queue) >= self.size:
-            self.queue = []
+    __PLAY = "⊳"
+    __PREV = "←"
+    __NEXT = "→"
+    __LOOP = "∞"
+    __SHUFFLE = "⧓"
+    __PREFERENCES = "≡"
+    __CROP_START = "CROP"
+    __CROP_START = "CANCEL"
 
-        if item < 0:
-            item = len(self.queue)
+    image_change_event = pyqtSignal(object)
+    image_crop_event = pyqtSignal()
 
-        self.queue.append(item)
-        return item
+    def __init__(self):
+        super().__init__()
 
-    def prev(self):
-        # TODO
-        print("TODO")
+        self.playing = False
+        self.playPause_action = self.create_action(PlayListController.__PLAY, "F5",
+                                                   self.play_or_pause, "Play/Pause", True)
+        self.previous_action = self.create_action(PlayListController.__PREV, "Left",
+                                                  self.previous, "Previous image")
+        self.next_action = self.create_action(PlayListController.__NEXT, "Right",
+                                              self.next, "Next image")
+        self.loop_action = self.create_action(PlayListController.__LOOP, "L",
+                                              self.loop, "Toggle playlist looping", True,
+                                              Imageplay.settings.get_setting("loop"))
+        self.shuffle_action = self.create_action(PlayListController.__SHUFFLE, "S",
+                                                 self.shuffle, "Shuffle play order", True,
+                                                 Imageplay.settings.get_setting("shuffle"))
+        self.options_action = self.create_action(PlayListController.__PREFERENCES, "Ctrl+P",
+                                                 self.preferences, "Open preferences")
+        self.crop_action = self.create_action(PlayListController.__CROP_START, "Ctrl+X",
+                                              self.crop, "Crop Image")
+        self.playlist = PlayList(self.shuffle_action.isChecked(),
+                             self.loop_action.isChecked())
+        self.playlist.image_change_event.connect(self.image_changed)
+        self.playlist.play_state_change_event.connect(self.play_state_changed)
+        self.initUI()
+        Imageplay.logger.info("Ready")
 
-    def next(self, is_random):
-        if not is_random:
-            return self.enqueue()
+    def initUI(self):
+        toolbar = QToolBar()
+        dummy1 = QWidget()
+        dummy1.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        dummy2 = QWidget()
+        dummy2.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        toolbar.addWidget(dummy1)
+        toolbar.addAction(self.previous_action)
+        toolbar.addAction(self.playPause_action)
+        toolbar.addAction(self.next_action)
+        toolbar.addSeparator()
+        toolbar.addAction(self.loop_action)
+        toolbar.addAction(self.shuffle_action)
+        toolbar.addSeparator()
+        toolbar.addAction(self.crop_action)
+        toolbar.addWidget(dummy2)
+        toolbar.addAction(self.options_action)
+        toolbar.setStyleSheet("QToolButton{font-size: 15px;}")
+        toolbar.setContentsMargins(0, 0, 0, 0)
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.playlist)
+        layout.addWidget(toolbar)
+
+        self.setLayout(layout)
+
+    def image_changed(self, image):
+        self.image_change_event.emit(image)
+
+    def play_state_changed(self, play_state):
+        self.playing = play_state
+        if self.playPause_action.isChecked() != play_state:
+            self.playPause_action.setChecked(play_state)
+
+    def play_or_pause(self):
+        if self.playing:
+            self.playlist.stop()
         else:
-            # Find a random number between 0 and size not present in the queue
-            rand = random.randint(0, self.size - 1)
-            while self.queue.__contains__(rand):
-                rand = random.randint(0, self.size - 1)
-            return self.enqueue(rand)
+            self.playlist.play()
 
-    def resize(self, new_size):
-        # if new size > current size set max size
-        if new_size > self.size:
-            self.size = new_size
-        # if new size < current size remove all numbers > new size
-        elif new_size < self.size:
-            for i in range(new_size, self.size):
-                if self.queue.__contains__(i):
-                    self.queue[self.queue.index(i)] = -1
-        self.reset()
+    def previous(self):
+        self.playlist.previous()
 
-    def reset(self):
-        self.queue.clear()
+    def next(self):
+        self.playlist.next()
 
+    def loop(self):
+        Imageplay.settings.apply_setting("loop", self.loop_action.isChecked())
 
-class AnimationHandler:
+    def shuffle(self):
+        Imageplay.settings.apply_setting("shuffle", self.shuffle_action.isChecked())
 
-    def __init__(self, animation_file):
-        self.animation_file = animation_file
-        self.movie = QtGui.QMovie(animation_file)
-        self.current_frame = 0
+    def crop(self):
+        self.playlist.stop()
+        self.image_crop_event.emit()
 
-    def next_frame(self):
-        print("Current frame is " + str(self.current_frame))
-        self.movie.jumpToFrame(self.current_frame)
-        self.current_frame += 1
-        return self.movie.currentPixmap()
+    @staticmethod
+    def preferences():
+        SettingsDialog().exec()
 
-    def has_next(self):
-        return self.current_frame < self.movie.frameCount()
-
-    def prev_frame(self):
-        if self.current_frame == 0:
-            return self.movie.currentPixMap
-        else:
-            self.current_frame -= 1
-            return next()
+    @staticmethod
+    def create_action(text, shortcut, slot, tooltip, checkable=False, checked=False):
+        action = QAction(text)
+        action.setShortcut(shortcut)
+        action.setCheckable(checkable)
+        action.setChecked(checked)
+        action.setToolTip(tooltip + "  (" + shortcut + ")")
+        if slot is not None:
+            action.triggered.connect(slot)
+        return action
 
 
 class PlayList(QTableView):
     image_change_event = pyqtSignal('PyQt_PyObject')
+    play_state_change_event = pyqtSignal(bool)
 
-    def __init__(self):
+    def __init__(self, shuffle, loop):
         super().__init__()
         self.initUI()
+        self.isShuffle = shuffle
+        self.isLoop = loop
 
-        self.queue = CircularLRUQueue(0)
+        self.queue = InfiniteHistoryStack(0)
         self.playedSoFar = 0
         self.animation_handler = None
+        self.image_delay = Imageplay.settings.get_setting("image_delay")
+        self.animation_delay = Imageplay.settings.get_setting("gif_delay")
+        self.recurse = Imageplay.settings.get_setting("recurse_subdirs")
+        self.supported_formats = []
+        self.doubleClicked.connect(self.doubleClicked_event)
+        for _format in QImageReader.supportedImageFormats():
+            self.supported_formats.append(f".{str(_format, encoding='ascii')}")
 
         self.timer = QtCore.QTimer(self)
-        self.timer.timeout.connect(self.time_changed)
-
-        self.playPause_action = self.create_action("Play", "F5", self.play_or_pause)
-        self.addAction(self.playPause_action)
-
-        self.previous_action = self.create_action("Previous", "Left", self.previous)
-        self.addAction(self.previous_action)
-
-        self.next_action = self.create_action("Next", "Right", self.next)
-        self.addAction(self.next_action)
-
-        self.loop_action = self.create_action("Loop", "L", self.loop, True, True)
-        self.loop_action.setCheckable(True)
-        self.addAction(self.loop_action)
-
-        self.shuffle_action = self.create_action("Shuffle", "S", None, True, False)
-        self.addAction(self.shuffle_action)
-        self.toggle_playback(False)
+        self.timer.timeout.connect(self.play)
+        Imageplay.settings.settings_change_event.connect(self.updateSettings)
 
     def initUI(self):
         self.setAcceptDrops(True)
         self.setDropIndicatorShown(True)
         self.setAlternatingRowColors(True)
         self.setShowGrid(False)
-        # stylesheet = "QHeaderView::section{" \
-        #              "border-top:0px solid #D8D8D8;" \
-        #              "border-left:0px solid #D8D8D8;" \
-        #              "border-right:1px solid #D8D8D8;" \
-        #              "border-bottom: 1px solid #D8D8D8;" \
-        #              "padding:4px;" \
-        #              "}"
-        # self.horizontalHeader().setStyleSheet(stylesheet)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.verticalHeader().hide()
         self.horizontalHeader().setHighlightSections(False)
@@ -151,101 +190,85 @@ class PlayList(QTableView):
             item_model = self.model()
         else:
             item_model = FileItemModel()
-        for file in file_urls:
-            if file.isLocalFile():
-                _dir, file = path.split(file.path())
-                # TODO-Supported files only
-                item_model.append_row(_dir, file)
+
+        item_model.append_rows(
+            FileScanner(file_urls, self.recurse, self.supported_formats).files)
+
         self.setModel(item_model)
-        self.resizeColumnsToContents()
+        self.resizeColumnToContents(0)
         self.resizeRowsToContents()
-        self.horizontalHeader().setStretchLastSection(True)
         if item_model.rowCount(self):
-            self.toggle_playback(True)
             self.queue.resize(item_model.rowCount(self))
-            self.timer.start(1000)
-            self.playPause_action.setText("Pause")
             self.playedSoFar = 0
+            self.play()
+
+    def doubleClicked_event(self, qModelIndex):
+        self.play(qModelIndex.row())
 
     def time_changed(self):
-        if self.animation_handler is not None:
-            print("In animation...")
-            if self.animation_handler.has_next():
-                self.image_change_event.emit(self.animation_handler.next_frame())
-                return
-            else:
-                # Discard the animation handler and chose next file
-                self.animation_handler = None
+        self.play()
 
-        if self.playedSoFar >= self.model().rowCount(self):
-            if self.loop_action.isChecked():
-                self.playedSoFar = 0
+    def previous(self):
+        self.play(self.queue.prev())
+
+    def next(self):
+        self.play(self.queue.next(self.isShuffle))
+
+    def updateSettings(self, key, value):
+        Imageplay.logger.debug(f"New setting applied {key}: {value}")
+        if key == "gif_delay":
+            self.animation_delay = value
+            if self.animation_handler is not None:
+                self.timer.setInterval(self.animation_delay)
+        elif key == "image_delay":
+            self.image_delay = value
+        elif key == "loop":
+            self.isLoop = value
+        elif key == "shuffle":
+            self.isShuffle = value
+            if self.isShuffle:
                 self.queue.reset()
-            else:
-                self.timer.stop()
-                self.toggle_playback(False)
-                return
+        elif key=="recurse_subdirs":
+            self.recurse = value
 
-        index = self.queue.next(self.shuffle_action.isChecked())
+    def stop(self):
+        self.play_state_change_event.emit(False)
+        self.timer.stop()
+
+    def play(self, index=-1):
+        if index < 0:
+            if self.animation_handler is not None:
+                Imageplay.logger.debug("In animation...")
+                if self.animation_handler.has_next():
+                    self.image_change_event.emit(self.animation_handler.next_frame())
+                    return
+                else:
+                    # Discard the animation handler and chose next file
+                    self.animation_handler = None
+
+            if self.playedSoFar >= self.model().rowCount(self):
+                if self.isLoop:
+                    self.playedSoFar = 0
+                else:
+                    self.timer.stop()
+                    self.play_state_change_event.emit(False)
+                    return
+
+            index = self.queue.next(self.isShuffle)
+
         file = path.join(self.model().index(index, 0).data(), self.model().index(index, 1).data())
+        Imageplay.logger.debug(file)
         if file.upper().endswith(".GIF"):
-            print("GIF MODE")
+            Imageplay.logger.debug("Entering GIF Mode")
             self.animation_handler = AnimationHandler(file)
+            self.timer.start(self.animation_delay)
+            self.play_state_change_event.emit(True)
         else:
             self.animation_handler = None
             self.image_change_event.emit(file)
+            self.timer.start(self.image_delay)
+            self.play_state_change_event.emit(True)
 
         self.playedSoFar = self.playedSoFar + 1
         self.selectRow(index)
-
-    def contextMenuEvent(self, event):
-        menu = QMenu(self)
-        menu.addAction(self.playPause_action)
-        menu.addAction(self.previous_action)
-        menu.addAction(self.next_action)
-        menu.addSeparator()
-        menu.addAction(self.loop_action)
-        menu.addAction(self.shuffle_action)
-
-        menu.exec_(self.mapToGlobal(event.pos()))
-
-    def play_or_pause(self):
-        if self.playPause_action.text() == "Play":
-            self.playPause_action.setText("Pause")
-            self.timer.start()
-        else:
-            self.playPause_action.setText("Play")
-            self.timer.stop()
-
-    def previous(self):
-        print("Previous")
-
-    def next(self):
-        print("next")
-
-    def loop(self):
-        self.queue.reset()
-
-    def animation_stopped(self):
-        print("Stop")
-        self.timer.start()
-
-    def animation_started(self, file, frame_count):
-        print(file, frame_count)
-        self.timer.stop()
-
-    def toggle_playback(self, toggle):
-        self.playPause_action.setEnabled(toggle)
-        self.previous_action.setEnabled(toggle)
-        self.next_action.setEnabled(toggle)
-
-    @staticmethod
-    def create_action(text, shortcut, slot, checkable=False, checked=False):
-        action = QAction(text)
-        action.setShortcut(shortcut)
-        action.setCheckable(checkable)
-        action.setChecked(checked)
-        if slot is not None:
-            action.triggered.connect(slot)
-        return action
 

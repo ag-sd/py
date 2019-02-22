@@ -7,17 +7,16 @@ from PyQt5.QtWidgets import (QApplication,
 
 import Imageplay
 from Imageplay.src.ImageView import ImageView
-from Imageplay.src.PlayList import PlayList
+from Imageplay.src.PlayList import PlayListController
 
 
 class ImagePlayApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.playlist = PlayList()
+        self.playlistController = PlayListController()
         self.imageView = ImageView()
-        self.playlist.image_change_event.connect(self.image_changed)
-        self.imageView.animation_started.connect(self.playlist.animation_started)
-        self.imageView.animation_stopped.connect(self.playlist.animation_stopped)
+        self.playlistController.image_change_event.connect(self.imageView.set_image)
+        self.playlistController.image_crop_event.connect(self.imageView.crop_image)
         self.initUI()
         self.show()
 
@@ -25,13 +24,15 @@ class ImagePlayApp(QMainWindow):
 
         splitter1 = QSplitter(Qt.Vertical)
         splitter1.addWidget(self.imageView)
-        splitter1.addWidget(self.playlist)
+        splitter1.addWidget(self.playlistController)
         splitter1.setSizes([500, 100])
 
         self.setCentralWidget(splitter1)
         self.resize(600, QtWidgets.QDesktopWidget().availableGeometry().height())
-        self.setWindowTitle('ImagePlay ' + Imageplay.__VERSION__)
-        self.center_ui()
+        self.setWindowTitle(Imageplay.__APP_NAME__)
+        self.setObjectName("MainWindow")
+        if not Imageplay.settings.load_ui(self, Imageplay.logger, True):
+            self.center_ui()
 
     def center_ui(self):
         # geometry of the main window
@@ -43,8 +44,8 @@ class ImagePlayApp(QMainWindow):
         # top left of rectangle becomes top left of window centering it
         self.move(qr.topLeft())
 
-    def image_changed(self, image_path):
-        self.imageView.set_image(image_path)
+    def closeEvent(self, QCloseEvent):
+        Imageplay.settings.save_ui(self, Imageplay.logger, True)
 
 
 def main():
