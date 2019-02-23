@@ -1,10 +1,10 @@
 from os import path
 
 from PyQt5 import QtCore
-from PyQt5.QtCore import pyqtSignal, Qt
-from PyQt5.QtGui import QImageReader
+from PyQt5.QtCore import pyqtSignal, Qt, QUrl
+from PyQt5.QtGui import QImageReader, QIcon
 from PyQt5.QtWidgets import QTableView, QAbstractItemView, QAction, QVBoxLayout, QWidget, QToolBar, \
-    QSizePolicy
+    QSizePolicy, QLabel
 
 import Imageplay
 from CommonUtils import FileScanner
@@ -20,10 +20,15 @@ class PlayListController(QWidget):
     __PREV = "←"
     __NEXT = "→"
     __LOOP = "∞"
-    __SHUFFLE = "⧓"
-    __PREFERENCES = "≡"
-    __CROP_START = "CROP"
-    __CROP_START = "CANCEL"
+    __SHFL = "⧓"
+    __PREF = "≡"
+    __EDIT = "𝐄"
+    __CROP = "۝"
+    __COLR = "☼"
+    __RESZ = "⊹"
+    __UNDO = __PREV
+    __EXIT = "⨉"
+    __SAVE = "⨀"
 
     image_change_event = pyqtSignal(object)
     image_crop_event = pyqtSignal()
@@ -32,55 +37,79 @@ class PlayListController(QWidget):
         super().__init__()
 
         self.playing = False
-        self.playPause_action = self.create_action(PlayListController.__PLAY, "F5",
-                                                   self.play_or_pause, "Play/Pause", True)
-        self.previous_action = self.create_action(PlayListController.__PREV, "Left",
-                                                  self.previous, "Previous image")
+        self.play_action = self.create_action(PlayListController.__PLAY, "F5",
+                                              self.play_or_pause,
+                                              "Play/Pause", True)
+        self.prev_action = self.create_action(PlayListController.__PREV, "Left",
+                                              self.prev,
+                                              "Previous image")
         self.next_action = self.create_action(PlayListController.__NEXT, "Right",
-                                              self.next, "Next image")
+                                              self.next,
+                                              "Next image")
         self.loop_action = self.create_action(PlayListController.__LOOP, "L",
-                                              self.loop, "Toggle playlist looping", True,
+                                              self.loop,
+                                              "Toggle playlist looping", True,
                                               Imageplay.settings.get_setting("loop"))
-        self.shuffle_action = self.create_action(PlayListController.__SHUFFLE, "S",
-                                                 self.shuffle, "Shuffle play order", True,
-                                                 Imageplay.settings.get_setting("shuffle"))
-        self.options_action = self.create_action(PlayListController.__PREFERENCES, "Ctrl+P",
-                                                 self.preferences, "Open preferences")
-        self.crop_action = self.create_action(PlayListController.__CROP_START, "Ctrl+X",
-                                              self.crop, "Crop Image")
-        self.playlist = PlayList(self.shuffle_action.isChecked(),
-                             self.loop_action.isChecked())
+        self.shfl_action = self.create_action(PlayListController.__SHFL, "S",
+                                              self.shfl,
+                                              "Shuffle play order", True,
+                                              Imageplay.settings.get_setting("shuffle"))
+        self.opts_action = self.create_action(PlayListController.__PREF, "Ctrl+P",
+                                              self.preferences,
+                                              "Open preferences")
+        self.edit_action = self.create_action(PlayListController.__EDIT, "Ctrl+E",
+                                              self.edit,
+                                              "Edit Image")
+        self.crop_action = self.create_action(PlayListController.__CROP, "Ctrl+R",
+                                              self.crop,
+                                              "Crop Image")
+        # TODO
+        self.colr_action = self.create_action(PlayListController.__COLR, "Ctrl+B",
+                                              self.colr,
+                                              "Colorize Image - TODO")
+        # TODO
+        self.resz_action = self.create_action(PlayListController.__RESZ, "Ctrl+I",
+                                              self.resz,
+                                              "Resize Image - TODO")
+        self.undo_action = self.create_action(PlayListController.__UNDO, "Ctrl+Z",
+                                              self.undo,
+                                              "Undo Last Action")
+        self.save_action = self.create_action(PlayListController.__SAVE, "Ctrl+S",
+                                              self.save,
+                                              "Save Image")
+        self.exit_action = self.create_action(PlayListController.__EXIT, "Shift+Ctrl+Z",
+                                              self.exit,
+                                              "Close without saving changes")
+        self.playlist = PlayList(self.shfl_action.isChecked(),
+                                 self.loop_action.isChecked())
         self.playlist.image_change_event.connect(self.image_changed)
         self.playlist.play_state_change_event.connect(self.play_state_changed)
+        self.toolbar = QToolBar()
         self.initUI()
         Imageplay.logger.info("Ready")
 
+    def process_args(self, args):
+        # TODO-Process first arg as below
+        """
+        -f list of files or directories
+        -d list of dirs or files
+        -b browse from current file in directory
+        """
+        files = []
+        for file in args[1:]:
+            files.append(QUrl.fromLocalFile(file))
+        self.playlist.files_added(files)
+
     def initUI(self):
-        toolbar = QToolBar()
-        dummy1 = QWidget()
-        dummy1.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        dummy2 = QWidget()
-        dummy2.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        toolbar.addWidget(dummy1)
-        toolbar.addAction(self.previous_action)
-        toolbar.addAction(self.playPause_action)
-        toolbar.addAction(self.next_action)
-        toolbar.addSeparator()
-        toolbar.addAction(self.loop_action)
-        toolbar.addAction(self.shuffle_action)
-        toolbar.addSeparator()
-        toolbar.addAction(self.crop_action)
-        toolbar.addWidget(dummy2)
-        toolbar.addAction(self.options_action)
-        toolbar.setStyleSheet("QToolButton{font-size: 15px;}")
-        toolbar.setContentsMargins(0, 0, 0, 0)
+        self.toolbar.setStyleSheet("QToolButton{font-size: 15px;}")
+        self.toolbar.setContentsMargins(0, 0, 0, 0)
+        self.set_playing_mode()
 
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self.playlist)
-        layout.addWidget(toolbar)
-
+        layout.addWidget(self.toolbar)
         self.setLayout(layout)
 
     def image_changed(self, image):
@@ -88,8 +117,8 @@ class PlayListController(QWidget):
 
     def play_state_changed(self, play_state):
         self.playing = play_state
-        if self.playPause_action.isChecked() != play_state:
-            self.playPause_action.setChecked(play_state)
+        if self.play_action.isChecked() != play_state:
+            self.play_action.setChecked(play_state)
 
     def play_or_pause(self):
         if self.playing:
@@ -97,7 +126,7 @@ class PlayListController(QWidget):
         else:
             self.playlist.play()
 
-    def previous(self):
+    def prev(self):
         self.playlist.previous()
 
     def next(self):
@@ -106,19 +135,77 @@ class PlayListController(QWidget):
     def loop(self):
         Imageplay.settings.apply_setting("loop", self.loop_action.isChecked())
 
-    def shuffle(self):
-        Imageplay.settings.apply_setting("shuffle", self.shuffle_action.isChecked())
+    def shfl(self):
+        Imageplay.settings.apply_setting("shuffle", self.shfl_action.isChecked())
+
+    def edit(self):
+        if self.playlist.model() is not None and self.playlist.model().rowCount(self.playlist) > 0:
+            self.playlist.stop()
+            self.set_editing_mode()
+
+    def exit(self):
+        self.set_playing_mode()
+        self.playlist.play()
+
+    def save(self):
+        print("Save")
+        self.exit()
+
+    def undo(self):
+        print("Undo")
+        # Pop the stack into the image
+
+    def resz(self):
+        print("Resize")
+
+    def colr(self):
+        print("Colorize")
 
     def crop(self):
-        self.playlist.stop()
         self.image_crop_event.emit()
+
+    def set_playing_mode(self):
+        self.toolbar.clear()
+        dummy1 = QWidget()
+        dummy1.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        dummy2 = QWidget()
+        dummy2.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.toolbar.addWidget(dummy1)
+        self.toolbar.addAction(self.prev_action)
+        self.toolbar.addAction(self.play_action)
+        self.toolbar.addAction(self.next_action)
+        self.toolbar.addSeparator()
+        self.toolbar.addAction(self.loop_action)
+        self.toolbar.addAction(self.shfl_action)
+        self.toolbar.addSeparator()
+        self.toolbar.addAction(self.edit_action)
+        self.toolbar.addWidget(dummy2)
+        self.toolbar.addAction(self.opts_action)
+
+    def set_editing_mode(self):
+        self.toolbar.clear()
+        dummy1 = QWidget()
+        dummy1.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        dummy2 = QWidget()
+        dummy2.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.toolbar.addWidget(dummy1)
+        self.toolbar.addAction(self.resz_action)
+        self.toolbar.addAction(self.colr_action)
+        self.toolbar.addAction(self.crop_action)
+        self.toolbar.addSeparator()
+        self.toolbar.addAction(self.undo_action)
+        self.toolbar.addSeparator()
+        self.toolbar.addAction(self.save_action)
+        self.toolbar.addAction(self.exit_action)
+        self.toolbar.addWidget(dummy2)
+        self.toolbar.addAction(self.opts_action)
 
     @staticmethod
     def preferences():
         SettingsDialog().exec()
 
     @staticmethod
-    def create_action(text, shortcut, slot, tooltip, checkable=False, checked=False):
+    def create_action(text, shortcut, slot, tooltip, checkable=False, checked=False, icon=None):
         action = QAction(text)
         action.setShortcut(shortcut)
         action.setCheckable(checkable)
@@ -126,6 +213,8 @@ class PlayListController(QWidget):
         action.setToolTip(tooltip + "  (" + shortcut + ")")
         if slot is not None:
             action.triggered.connect(slot)
+        if icon is not None:
+            action.setIcon(icon)
         return action
 
 

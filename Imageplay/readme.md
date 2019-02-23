@@ -11,6 +11,8 @@ Imageplay lets you run a slide-show of a collection of images. The slide-show ru
 - [x] Play in Order / Random. 
 - [x] Loop / Stop at end of list
 - [ ] Crop images
+- [ ] Resize images
+- [ ] Color images
 - [ ] Display image properties
 - [ ] Search Tools // TODO-Flesh out
 - [ ] Save an image playlist
@@ -19,10 +21,16 @@ Imageplay lets you run a slide-show of a collection of images. The slide-show ru
 - [x] Playlist to use a stack
 
 ### Changelog
-Wed Feb  6 23:55:27 EST 2019 Initial commit of the code
-Wed Feb 13 20:29:03 EST 2019 Updates and ability to play GIF images added
-Thu Feb 21 21:31:15 EST 2019
-Improved UX with play controls
-Updated playlist to internally use a stack with infinite history
-Added image change and animation change settings
-Added directory support
+
+ 
+**Thu Feb 21 21:31:15 EST 2019**
+- Improved UX with play controls
+- Updated playlist to internally use a stack with infinite history
+- Added image change and animation change settings
+- Added directory support
+   
+**Wed Feb 13 20:29:03 EST 2019**  
+Updates and ability to play GIF images added 
+
+**Wed Feb  6 23:55:27 EST 2019**  
+Initial commit of the code  
