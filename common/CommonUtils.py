@@ -161,5 +161,5 @@ class FileScanner:
     def is_supported(self, file):
         if self.supported_extensions is not None:
             _, ext = os.path.splitext(file)
-            return self.supported_extensions.__contains__(ext)
+            return self.supported_extensions.__contains__(ext.upper())
         return True

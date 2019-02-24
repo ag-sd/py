@@ -23,15 +23,17 @@ class PlayListController(QWidget):
     __SHFL = "⧓"
     __PREF = "≡"
     __EDIT = "𝐄"
-    __CROP = "۝"
-    __COLR = "☼"
+    __CROP = "◳"  # "۝"
+    __COLR = "◧"  # ""☼"
     __RESZ = "⊹"
     __UNDO = __PREV
     __EXIT = "⨉"
-    __SAVE = "⨀"
+    __SAVE = "✓"  # "⨀"
 
     image_change_event = pyqtSignal(object)
     image_crop_event = pyqtSignal()
+    image_save_event = pyqtSignal()
+    image_exit_event = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -88,17 +90,11 @@ class PlayListController(QWidget):
         self.initUI()
         Imageplay.logger.info("Ready")
 
-    def process_args(self, args):
-        # TODO-Process first arg as below
-        """
-        -f list of files or directories
-        -d list of dirs or files
-        -b browse from current file in directory
-        """
-        files = []
-        for file in args[1:]:
-            files.append(QUrl.fromLocalFile(file))
-        self.playlist.files_added(files)
+    def arg_files(self, files):
+        urls = []
+        for file in files:
+            urls.append(QUrl.fromLocalFile(file))
+        self.playlist.files_added(urls)
 
     def initUI(self):
         self.toolbar.setStyleSheet("QToolButton{font-size: 15px;}")
@@ -181,6 +177,7 @@ class PlayListController(QWidget):
         self.toolbar.addAction(self.edit_action)
         self.toolbar.addWidget(dummy2)
         self.toolbar.addAction(self.opts_action)
+        self.playlist.setEnabled(True)
 
     def set_editing_mode(self):
         self.toolbar.clear()
@@ -193,12 +190,13 @@ class PlayListController(QWidget):
         self.toolbar.addAction(self.colr_action)
         self.toolbar.addAction(self.crop_action)
         self.toolbar.addSeparator()
-        self.toolbar.addAction(self.undo_action)
-        self.toolbar.addSeparator()
+        # self.toolbar.addAction(self.undo_action)
+        # self.toolbar.addSeparator()
         self.toolbar.addAction(self.save_action)
         self.toolbar.addAction(self.exit_action)
         self.toolbar.addWidget(dummy2)
         self.toolbar.addAction(self.opts_action)
+        self.playlist.setEnabled(False)
 
     @staticmethod
     def preferences():
@@ -237,7 +235,7 @@ class PlayList(QTableView):
         self.supported_formats = []
         self.doubleClicked.connect(self.doubleClicked_event)
         for _format in QImageReader.supportedImageFormats():
-            self.supported_formats.append(f".{str(_format, encoding='ascii')}")
+            self.supported_formats.append(f".{str(_format, encoding='ascii').upper()}")
 
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.play)

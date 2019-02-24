@@ -1,3 +1,4 @@
+import argparse
 import sys
 
 from PyQt5 import QtWidgets
@@ -12,7 +13,7 @@ from Imageplay.src.PlayList import PlayListController
 
 class ImagePlayApp(QMainWindow):
 
-    def __init__(self, args):
+    def __init__(self):
         super().__init__()
         self.imageView = ImageView()
         self.playlistController = PlayListController()
@@ -20,12 +21,11 @@ class ImagePlayApp(QMainWindow):
         self.playlistController.image_crop_event.connect(self.imageView.crop_image)
         self.initUI()
         self.show()
-        if len(args) > 1:
-            self.playlistController.process_args(args)
+        self.parse_args()
 
     def initUI(self):
         base_widget = QWidget()
-        #baseWidget.setStyleSheet("background-color: #212121")
+        base_widget.setStyleSheet("background-color: #212121")
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.imageView)
@@ -56,10 +56,34 @@ class ImagePlayApp(QMainWindow):
     def closeEvent(self, QCloseEvent):
         Imageplay.settings.save_ui(self, Imageplay.logger, True)
 
+    def parse_args(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument('-f', '--files', nargs='+',
+                            help='Browse a set of files', required=False)
+        parser.add_argument('-d', '--dirs', nargs='+',
+                            help='Browse a set of directories', required=False)
+        parser.add_argument('-b', '--browse', type=str,
+                            help='Browse a directories starting with the specified file', required=False)
+        args = parser.parse_args()
+        Imageplay.logger.info(f"Arguments provided: {args}")
+        if args.browse and (args.files or args.dirs):
+            parser.error("Browse cannot be specified with any other argument")
+        if args.browse:
+            print("Will browse")
+        else:
+            files = []
+            if args.files:
+                files += args.files
+            if args.dirs:
+                files += args.dirs
+            self.playlistController.arg_files(files)
+
+
+
 
 def main():
     app = QApplication(sys.argv)
-    ex = ImagePlayApp(sys.argv)
+    ex = ImagePlayApp()
     sys.exit(app.exec_())
 
 
