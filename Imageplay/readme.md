@@ -22,6 +22,9 @@ Imageplay lets you run a slide-show of a collection of images. The slide-show ru
 
 ### Changelog
 
+**Sun Feb 24 00:48:37 EST 2019**
+- Added command line support
+- Added scaling support
  
 **Thu Feb 21 21:31:15 EST 2019**
 - Improved UX with play controls

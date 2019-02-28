@@ -2,6 +2,8 @@ import random
 from collections import deque
 
 
+
+
 class InfiniteHistoryStack:
     def __init__(self, size):
         self.size = size
@@ -103,3 +105,8 @@ class BoundedLRUQueue:
 
     def reset(self):
         self.queue.clear()
+
+
+class InfiniteHistoryVariableStack(InfiniteHistoryStack):
+    def __init__(self, size):
+        super().__init__(size)

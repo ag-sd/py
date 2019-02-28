@@ -12,27 +12,34 @@ class SettingsDialog(QDialog):
         self.imageSpinner.setMinimum(1)
         self.imageSpinner.setValue(Imageplay.settings.get_setting("image_delay", 3000) / 1000)
         self.imageSpinner.valueChanged.connect(self.image_delay_change)
+
         self.gifSpinner = QSpinBox()
         self.gifSpinner.setMinimum(1)
         self.gifSpinner.setValue(Imageplay.settings.get_setting("gif_delay", 1000) / 1000)
         self.gifSpinner.valueChanged.connect(self.animation_delay_change)
+
         self.recurse = QCheckBox("Add all child folders when a directory is added")
         self.recurse.setChecked(Imageplay.settings.get_setting("recurse_subdirs", False))
         self.recurse.stateChanged.connect(self.recurse_change)
+
+        self.gifByFrame = QCheckBox("View gif files one frame at a time")
+        self.gifByFrame.setChecked(Imageplay.settings.get_setting("gif_by_frame", False))
+        self.gifByFrame.stateChanged.connect(self.gif_by_frame_change)
         self.initUI()
 
     def initUI(self):
         layout = QVBoxLayout()
-        layout.addLayout(self.createSpinnerLayout("Load next image in (seconds)", self.imageSpinner))
-        layout.addLayout(self.createSpinnerLayout("Load next animation in (seconds)", self.gifSpinner))
+        layout.addLayout(self.create_spinner_layout("Load next image in (seconds)", self.imageSpinner))
+        layout.addLayout(self.create_spinner_layout("Load next animation in (seconds)", self.gifSpinner))
         layout.addWidget(self.recurse)
+        layout.addWidget(self.gifByFrame)
 
         self.setLayout(layout)
         self.setWindowTitle("Configure Imageplay")
         self.setWindowModality(Qt.ApplicationModal)
 
     @staticmethod
-    def createSpinnerLayout(label, spinbox):
+    def create_spinner_layout(label, spinbox):
         layout = QHBoxLayout()
         layout.addWidget(QLabel(label))
         layout.addStretch(1)
@@ -49,6 +56,9 @@ class SettingsDialog(QDialog):
 
     def recurse_change(self):
         Imageplay.settings.apply_setting("recurse_subdirs", self.recurse.isChecked())
+
+    def gif_by_frame_change(self):
+        Imageplay.settings.apply_setting("gif_by_frame", self.gifByFrame.isChecked())
 
 
 

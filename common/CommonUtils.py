@@ -4,7 +4,7 @@ import os
 from PyQt5.QtCore import QObject, pyqtSignal, QSettings
 from PyQt5.QtWidgets import QCheckBox, QRadioButton, QGroupBox, QWidget
 
-from CustomUI import FileChooser
+from common.CustomUI import FileChooser
 
 
 def get_logger(app_name):

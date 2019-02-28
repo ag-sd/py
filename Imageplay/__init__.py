@@ -1,4 +1,6 @@
-import CommonUtils
+from PyQt5.QtGui import QImageReader
+
+from common import CommonUtils
 
 __VERSION__ = "0.0.3"
 __NAME__ = "ImagePlay"
@@ -11,8 +13,13 @@ settings = CommonUtils.AppSettings(
     {
         "image_delay": 3000,
         "gif_delay": 1000,
+        "gif_by_frame": False,
         "recurse_subdirs": False,
         "shuffle": False,
         "loop": True,
     }
 )
+
+supported_formats = []
+for _format in QImageReader.supportedImageFormats():
+    supported_formats.append(f".{str(_format, encoding='ascii').upper()}")

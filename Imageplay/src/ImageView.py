@@ -1,6 +1,6 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QSizePolicy, QRubberBand, QHBoxLayout, QSizeGrip, QLayout
+from PyQt5.QtGui import QPixmap, QPalette
+from PyQt5.QtWidgets import QWidget, QLabel, QRubberBand, QHBoxLayout, QSizeGrip, QScrollArea
 
 import Imageplay
 
@@ -53,7 +53,7 @@ class ResizableRubberBand(QWidget):
         self.move_offset = None
 
 
-class ImageView(QWidget):
+class ImageView(QScrollArea):
 
     def __init__(self):
         super().__init__()
@@ -61,37 +61,41 @@ class ImageView(QWidget):
         self.image = ""
         self.movie = None
         self.band = None
+        self.isScaled = True
+        self.setBackgroundRole(QPalette.Shadow)
+        self.setWidgetResizable(True)
+        self.setAlignment(Qt.AlignCenter)
         self.initUI()
 
     def initUI(self):
         self.label.setMinimumSize(1, 1)
         self.label.setAlignment(Qt.AlignCenter)
+        self.setWidget(self.label)
 
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.label)
-        self.setLayout(layout)
-
-    def crop_image(self):
-        if self.label.pixmap() is not None:
-            self.band = ResizableRubberBand(self.label)
-
-    def set_image(self, image_file):
+    def set_image(self, qImage, file):
         Imageplay.logger.debug("Image received ")
-        self.image = image_file
+        self.label.setText(file)
+        # self.image = image_file
+        # self.resizeEvent(None)
+
+    def set_scaling(self, scaling):
+        self.isScaled = scaling
+        self.setWidgetResizable(scaling)
         self.resizeEvent(None)
 
     def resizeEvent(self, event):
         pixmap = None
 
         if isinstance(self.image, QPixmap):
-            pixmap = self.image.scaled(self.label.width(), self.label.height(), Qt.KeepAspectRatio)
-            self.label.setPixmap(self.image.scaled(self.label.width(), self.label.height(), Qt.KeepAspectRatio))
+            pixmap = self.image
         elif isinstance(self.image, str) and self.image != "":
-            pixmap = QPixmap(self.image).scaled(self.width(), self.height(), Qt.KeepAspectRatio)
+            pixmap = QPixmap(self.image)
+
+        if self.isScaled and pixmap is not None:
+            pixmap = pixmap.scaled(self.width(), self.height(), Qt.KeepAspectRatio)
 
         if pixmap is not None:
             self.label.setPixmap(pixmap)
+            self.label.resize(pixmap.size())
             self.label.setMaximumSize(pixmap.size())
 

@@ -16,7 +16,7 @@ class AnimationHandler:
                               str(self.movie.frameCount()))
         self.movie.jumpToFrame(self.current_frame)
         self.current_frame += 1
-        return self.movie.currentPixmap()
+        return self.movie.currentImage()
 
     def has_next(self):
         return self.current_frame < self.movie.frameCount()
