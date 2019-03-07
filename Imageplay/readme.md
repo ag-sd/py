@@ -10,7 +10,7 @@ Imageplay lets you run a slide-show of a collection of images. The slide-show ru
 - [x] Play GIF images frame-by-frame
 - [x] Play in Order / Random. 
 - [x] Loop / Stop at end of list
-- [ ] Crop images
+- [x] Crop images
 - [ ] Resize images
 - [ ] Rotate images
 - [ ] Color images
@@ -24,6 +24,12 @@ Imageplay lets you run a slide-show of a collection of images. The slide-show ru
 - [ ] Fine tuned zoom in and zoom out
 
 ### Changelog
+
+**Wed Mar  6 21:31:47 EST 2019**
+- Added zoom in and zoom out
+- Image Properties widget added
+- Image Cropping added
+- General code refactoring and separation of actions
 
 **Sun Feb 24 00:48:37 EST 2019**
 - Added command line support
