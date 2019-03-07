@@ -26,4 +26,4 @@ class AnimationHandler:
             return self.movie.currentPixMap
         else:
             self.current_frame -= 1
-            return next()
+            return self.next_frame()

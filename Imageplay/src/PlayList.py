@@ -1,130 +1,65 @@
-from enum import Enum
-from functools import partial
-
-from PyQt5.QtCore import QUrl
-from PyQt5.QtWidgets import QAction, QVBoxLayout, QWidget, QToolBar, \
-    QSizePolicy, QTableView, QAbstractItemView
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QTableView, QAbstractItemView
 
 import Imageplay
-from SettingsDialog import SettingsDialog
+from Settings import SettingsKeys
 from common.CommonUtils import FileScanner
 
 
-class Mode(Enum):
-    PLAYING = 1
-    EDITING = 2
+class PlayList(QTableView):
 
-
-class Controller(QWidget):
-
-    __SZ_TRUE = "⊞"
-    __SZ_FITS = "⊟"
-
-    __PREV = "←"
-    __NEXT = "→"
-
-    __LOOP = "∞"
-    __SHFL = "⧓"
-
-    __PREF = "≡"
-
-    def __init__(self, playlist_model):
+    def __init__(self, model):
         super().__init__()
-        self.prev_action = self.create_action(Controller.__PREV, "Left",
-                                              self.action_event,
-                                              "Previous image")
-        self.next_action = self.create_action(Controller.__NEXT, "Right",
-                                              self.action_event,
-                                              "Next image")
-
-        self.loop_action = self.create_action(Controller.__LOOP, "L",
-                                              self.action_event,
-                                              "Toggle playlist looping", True,
-                                              Imageplay.settings.get_setting("loop"))
-        self.shfl_action = self.create_action(Controller.__SHFL, "S",
-                                              self.action_event,
-                                              "Toggle playlist shuffling", True,
-                                              Imageplay.settings.get_setting("shuffle"))
-        self.opts_action = self.create_action(Controller.__PREF, "Ctrl+P",
-                                              self.action_event,
-                                              "Open preferences")
-
-        self.playlist_model = playlist_model
-        self.playlist_table = PlayList(playlist_model)
-        self.toolbar = QToolBar()
+        self.setModel(model)
+        model.files_update_event.connect(self.adjust_view)
         self.initUI()
-        self.set_playing_mode()
-        Imageplay.logger.info("Ready")
 
     def initUI(self):
-        self.toolbar.setStyleSheet("QToolButton{font-size: 16px;}")
-        self.toolbar.setContentsMargins(0, 0, 0, 0)
+        self.setAcceptDrops(True)
+        self.setDropIndicatorShown(True)
+        self.setAlternatingRowColors(True)
+        self.setShowGrid(False)
+        self.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.verticalHeader().hide()
+        self.horizontalHeader().setHighlightSections(False)
+        self.horizontalHeader().setStretchLastSection(True)
+        self.doubleClicked.connect(self.double_click_event)
 
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self.toolbar)
-        layout.addWidget(self.playlist_table)
-        self.setLayout(layout)
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
 
-    def action_event(self, action, opt1):
-        if action == Controller.__PREV:
-            self.playlist_model.previous()
-        elif action == Controller.__NEXT:
-            self.playlist_model.next(
-                Imageplay.settings.get_setting("shuffle", False),
-                Imageplay.settings.get_setting("loop", False),
-            )
-        elif action == Controller.__LOOP:
-            Imageplay.settings.apply_setting("loop", opt1)
-        elif action == Controller.__SHFL:
-            Imageplay.settings.apply_setting("shuffle", opt1)
-        elif action == Controller.__PREF:
-            SettingsDialog().exec()
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasUrls:
+            event.setDropAction(Qt.CopyAction)
+            event.accept()
+        else:
+            event.ignore()
 
-    def files_from_args(self, files, start_file=None):
-        urls = []
-        for file in files:
-            urls.append(QUrl.fromLocalFile(file))
-        self.playlist_model.add_files(
-            FileScanner(urls,
-                        Imageplay.settings.get_setting("recurse_subdirs", False),
-                        Imageplay.supported_formats).files)
-        index = -1 if start_file is None else self.playlist_model.find_file(start_file)
-        self.playlist_model.next(
+    def dropEvent(self, event):
+        if event.mimeData().hasUrls:
+            self.files_added(event.mimeData().urls())
+        else:
+            event.ignore()
+
+    def double_click_event(self, qModelIndex):
+        self.model().next(
             Imageplay.settings.get_setting("shuffle", False),
-            Imageplay.settings.get_setting("loop", False),
-            index)
+            qModelIndex.row()
+        )
 
-    def set_playing_mode(self):
-        self.toolbar.clear()
-        dummy1 = QWidget()
-        dummy1.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        dummy2 = QWidget()
-        dummy2.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.toolbar.addAction(self.prev_action)
-        self.toolbar.addAction(self.next_action)
-        self.toolbar.addSeparator()
-        self.toolbar.addAction(self.loop_action)
-        self.toolbar.addAction(self.shfl_action)
-        self.toolbar.addWidget(dummy2)
-        self.toolbar.addAction(self.opts_action)
+    def files_added(self, file_urls):
+        self.model().add_files(
+            FileScanner(file_urls,
+                        Imageplay.settings.get_setting(SettingsKeys.recurse_subdirs, False),
+                        Imageplay.supported_formats).files)
+        self.adjust_view()
 
-    def set_editing_mode(self):
-        self.toolbar.clear()
-
-    @staticmethod
-    def create_action(text, shortcut, slot, tooltip, checkable=False, checked=False, icon=None):
-        action = QAction(text)
-        action.setShortcut(shortcut)
-        action.setCheckable(checkable)
-        action.setChecked(checked)
-        action.setToolTip(tooltip + "  (" + shortcut + ")")
-        if slot is not None:
-            action.triggered.connect(partial(slot, text))
-        if icon is not None:
-            action.setIcon(icon)
-        return action
+    def adjust_view(self):
+        self.resizeColumnToContents(0)
+        self.resizeRowsToContents()
 
 # class PlayListController(QWidget):
 #
@@ -172,10 +107,7 @@ class Controller(QWidget):
 #         self.exit_action = self.create_action(PlayListController.__EXIT, "Ctrl+W",
 #                                               self.exit,
 #                                               "Close without saving changes")
-#
-#         self.fits_size_action = self.create_action(PlayListController.__FITS_SIZE, "Ctrl+0",
-#                                               self.fits_size,
-#                                               "Scale to fit window", checkable=True, checked=True)
+
 #
 #
 #
@@ -315,61 +247,3 @@ class Controller(QWidget):
 #         return action
 #
 #
-
-
-class PlayList(QTableView):
-
-    def __init__(self, model):
-        super().__init__()
-        self.setModel(model)
-        model.files_update_event.connect(self.adjust_view)
-        self.initUI()
-
-    def initUI(self):
-        self.setAcceptDrops(True)
-        self.setDropIndicatorShown(True)
-        self.setAlternatingRowColors(True)
-        self.setShowGrid(False)
-        self.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.verticalHeader().hide()
-        self.horizontalHeader().setHighlightSections(False)
-        self.horizontalHeader().setStretchLastSection(True)
-        self.doubleClicked.connect(self.double_click_event)
-
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-        else:
-            event.ignore()
-
-    def dragMoveEvent(self, event):
-        if event.mimeData().hasUrls:
-            event.setDropAction(Qt.CopyAction)
-            event.accept()
-        else:
-            event.ignore()
-
-    def dropEvent(self, event):
-        if event.mimeData().hasUrls:
-            self.files_added(event.mimeData().urls())
-        else:
-            event.ignore()
-
-    def double_click_event(self, qModelIndex):
-        self.model().next(
-            Imageplay.settings.get_setting("shuffle", False),
-            Imageplay.settings.get_setting("loop", False),
-            qModelIndex.row()
-        )
-
-    def files_added(self, file_urls):
-        self.model().add_files(
-            FileScanner(file_urls,
-                        Imageplay.settings.get_setting("recurse_subdirs", False),
-                        Imageplay.supported_formats).files)
-        self.adjust_view()
-
-    def adjust_view(self):
-        self.resizeColumnToContents(0)
-        self.resizeRowsToContents()
-

@@ -4,11 +4,13 @@ import sys
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QApplication,
-                             QMainWindow, QSplitter, QDesktopWidget)
+                             QMainWindow, QSplitter, QDesktopWidget, QVBoxLayout, QWidget)
 
 import Imageplay
+from ControlBar import ControlBar
+from ImageDetails import ImageDetails
 from Imageplay.src.ImageView import ImageView
-from Imageplay.src.PlayList import Controller
+from PlayList import PlayList
 from model.PlaylistFileModel import PlaylistFileModel
 
 
@@ -18,26 +20,59 @@ class ImagePlayApp(QMainWindow):
         super().__init__()
         self.imageView = ImageView()
         self.playlist_model = PlaylistFileModel()
-        self.playlistController = Controller(self.playlist_model)
+        self.playlist_table = PlayList(self.playlist_model)
+        self.playlistController = ControlBar(self.playlist_model)
+        self.imageDetails = ImageDetails()
         self.initUI()
         self.show()
-        self.parse_args()
+        files, start_file = self.parse_args()
+        self.playlistController.files_from_args(files, start_file)
 
     def initUI(self):
 
         self.playlist_model.image_change_event.connect(self.imageView.set_image)
+        self.playlist_model.image_change_event.connect(self.imageDetails.refresh_details)
+        self.playlistController.image_edit_event.connect(self.imageView.editEvent)
+        self.playlistController.image_edit_complete_event.connect(self.imageView.image_edit_complete)
+        self.playlistController.image_edit_starting_event.connect(self.image_editing_started)
+        self.playlistController.image_edit_complete_event.connect(self.image_editing_complete)
+        self.playlistController.image_zoom_event.connect(self.imageView.change_zoom)
 
-        splitter1 = QSplitter(Qt.Vertical)
-        splitter1.addWidget(self.imageView)
-        splitter1.addWidget(self.playlistController)
-        splitter1.setSizes([500, 100])
+        splitter_list = QSplitter(Qt.Horizontal)
+        splitter_list.addWidget(self.imageDetails)
+        splitter_list.addWidget(self.playlist_table)
+        splitter_list.setSizes([250, 500])
+        splitter_list.setObjectName("_stateful_splitter_list")
 
-        self.setCentralWidget(splitter1)
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.playlistController)
+        layout.addWidget(splitter_list, 1)
+
+        dummy = QWidget()
+        dummy.setLayout(layout)
+
+        splitter_main = QSplitter(Qt.Vertical)
+        splitter_main.addWidget(self.imageView)
+        splitter_main.addWidget(dummy)
+        splitter_main.setSizes([500, 100])
+        splitter_main.setObjectName("_stateful_splitter_main")
+
+        self.setCentralWidget(splitter_main)
         self.resize(600, QDesktopWidget().availableGeometry().height())
         self.setWindowTitle(Imageplay.__APP_NAME__)
         self.setObjectName("MainWindow")
-        if not Imageplay.settings.load_ui(self, Imageplay.logger, True):
+        if not Imageplay.settings.load_ui(self, Imageplay.logger):
             self.center_ui()
+
+    def image_editing_started(self):
+        self.playlist_table.setEnabled(False)
+        self.imageDetails.setEnabled(False)
+
+    def image_editing_complete(self):
+        self.playlist_table.setEnabled(True)
+        self.imageDetails.setEnabled(True)
 
     def center_ui(self):
         # geometry of the main window
@@ -50,9 +85,10 @@ class ImagePlayApp(QMainWindow):
         self.move(qr.topLeft())
 
     def closeEvent(self, QCloseEvent):
-        Imageplay.settings.save_ui(self, Imageplay.logger, True)
+        Imageplay.settings.save_ui(self, Imageplay.logger)
 
-    def parse_args(self):
+    @staticmethod
+    def parse_args():
         parser = argparse.ArgumentParser()
         parser.add_argument('-f', '--files', nargs='+',
                             help='Browse a set of files', required=False)
@@ -77,7 +113,7 @@ class ImagePlayApp(QMainWindow):
                 files += args.files
             if args.dirs:
                 files += args.dirs
-        self.playlistController.files_from_args(files, start_file)
+        return files, start_file
 
 
 def main():

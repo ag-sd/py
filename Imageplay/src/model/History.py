@@ -2,8 +2,6 @@ import random
 from collections import deque
 
 
-
-
 class InfiniteHistoryStack:
     def __init__(self, size):
         self.size = size
@@ -28,6 +26,8 @@ class InfiniteHistoryStack:
                     return self.enqueue(rand)
                 else:
                     rand = random.randint(0, self.size - 1)
+                    while self.stack[-1] == rand:
+                        rand = random.randint(0, self.size - 1)
             return self.enqueue(rand)
         else:
             if len(self.stack) == 0:

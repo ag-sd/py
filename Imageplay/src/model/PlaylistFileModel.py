@@ -3,6 +3,7 @@ from PyQt5.QtGui import QImage
 from PyQt5.QtWidgets import QFileIconProvider
 
 import Imageplay
+from Imageplay import SettingsKeys
 from model.Animation import AnimationHandler
 from model.History import InfiniteHistoryVariableStack
 
@@ -27,12 +28,11 @@ class PlaylistFileModel(QAbstractTableModel):
         self.file_items = []
         self.history = InfiniteHistoryVariableStack(0)
         self.animation_handler = None
-        self.playedSoFar = 0
 
     def previous(self):
-        self.next(False, False, self.history.prev())
+        self.next(False, self.history.prev())
 
-    def next(self, shuffle, loop, index=-1):
+    def next(self, shuffle, index=-1):
         if index < 0:
             if self.animation_handler is not None:
                 Imageplay.logger.debug("In animation...")
@@ -44,16 +44,11 @@ class PlaylistFileModel(QAbstractTableModel):
                     # Discard the animation handler and chose next file
                     self.animation_handler = None
 
-            if self.playedSoFar >= self.rowCount(self):
-                self.playedSoFar = 0
-                if not loop:
-                    return
-
             index = self.history.next(shuffle)
 
         file = self.file_items[index].absoluteFilePath()
         Imageplay.logger.debug(file)
-        if file.upper().endswith(".GIF") and Imageplay.settings.get_setting("gif_by_frame", False):
+        if file.upper().endswith(".GIF") and Imageplay.settings.get_setting(SettingsKeys.gif_by_frame, False):
             Imageplay.logger.debug("Entering GIF Mode")
             self.animation_handler = AnimationHandler(file)
             self.image_change_event.emit(self.animation_handler.next_frame(),
@@ -61,7 +56,6 @@ class PlaylistFileModel(QAbstractTableModel):
         else:
             self.animation_handler = None
             self.image_change_event.emit(QImage(file), file)
-        self.playedSoFar += 1
 
     def rowCount(self, parent):
         return len(self.file_items)

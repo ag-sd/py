@@ -12,13 +12,16 @@ Imageplay lets you run a slide-show of a collection of images. The slide-show ru
 - [x] Loop / Stop at end of list
 - [ ] Crop images
 - [ ] Resize images
+- [ ] Rotate images
 - [ ] Color images
-- [ ] Display image properties
-- [ ] Search Tools // TODO-Flesh out
+- [x] Display image properties
+- [ ] Duplicate Image Finder // TODO-Flesh out
+- [ ] Library Tools
 - [ ] Save an image playlist
 - [ ] Filter images by dimension, color etc.
 - [x] Unit Tests
 - [x] Playlist to use a stack
+- [ ] Fine tuned zoom in and zoom out
 
 ### Changelog
 
