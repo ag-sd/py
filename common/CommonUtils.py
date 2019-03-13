@@ -4,7 +4,7 @@ import os
 from PyQt5.QtCore import QObject, pyqtSignal, QSettings
 from PyQt5.QtWidgets import QCheckBox, QRadioButton, QGroupBox, QWidget, QSplitter
 
-from common.CustomUI import FileChooser
+from common.CustomUI import FileChooserTextBox
 
 
 def get_logger(app_name):
@@ -74,7 +74,7 @@ class AppSettings(QObject):
                     value = obj.checkState()
                 elif isinstance(obj, QRadioButton) or isinstance(obj, QGroupBox):
                     value = obj.isChecked()
-                elif isinstance(obj, FileChooser):
+                elif isinstance(obj, FileChooserTextBox):
                     value = obj.getSelection()
                 elif isinstance(obj, QSplitter):
                     value = obj.saveState()
@@ -119,7 +119,7 @@ class AppSettings(QObject):
                     obj.setChecked(value)
                 elif isinstance(obj, QRadioButton) or isinstance(obj, QGroupBox):
                     obj.setChecked(bool(value))
-                elif isinstance(obj, FileChooser):
+                elif isinstance(obj, FileChooserTextBox):
                     obj.setSelection(value)
                 elif isinstance(obj, QSplitter):
                     obj.restoreState(value)

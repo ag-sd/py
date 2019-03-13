@@ -25,6 +25,10 @@ Imageplay lets you run a slide-show of a collection of images. The slide-show ru
 
 ### Changelog
 
+**Wed Mar 13 00:09:29 EDT 2019**
+- Added basic duplicate image finder framework
+- Additional widgets to support duplicate image dialog
+
 **Wed Mar  6 21:31:47 EST 2019**
 - Added zoom in and zoom out
 - Image Properties widget added
