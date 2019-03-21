@@ -162,7 +162,7 @@ class FileScanner:
                 if not recurse:
                     break
 
-        return files
+        return set(files)
 
     def is_supported(self, file):
         if self.supported_extensions is not None:

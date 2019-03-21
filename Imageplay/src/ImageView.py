@@ -1,6 +1,6 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QPalette
-from PyQt5.QtWidgets import QWidget, QLabel, QRubberBand, QHBoxLayout, QSizeGrip, QScrollArea, QSizePolicy
+from PyQt5.QtWidgets import QWidget, QLabel, QRubberBand, QHBoxLayout, QSizeGrip, QScrollArea
 
 import Imageplay
 from Imageplay import SettingsKeys

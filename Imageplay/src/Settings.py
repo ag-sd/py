@@ -15,6 +15,7 @@ class SettingsKeys(Enum):
     shuffle = "shuffle"
     loop = "loop"
     image_scaled = "image_scaled"
+    dupe_image_view_zoom = "dupe_image_view_zoom"
 
 
 class SettingsDialog(QDialog):

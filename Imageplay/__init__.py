@@ -18,7 +18,8 @@ settings = CommonUtils.AppSettings(
         SettingsKeys.recurse_subdirs: False,
         SettingsKeys.shuffle: False,
         SettingsKeys.loop: True,
-        SettingsKeys.image_scaled: True
+        SettingsKeys.image_scaled: True,
+        SettingsKeys.dupe_image_view_zoom: 5
     }
 )
 
