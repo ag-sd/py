@@ -45,12 +45,12 @@ class TaskRunner(QObject):
             start_timer = datetime.now()
 
             curr_file.set_started(self.output_dir, curr_file.file_name, self.encoder)
-            file_model.updateView(process_count)
+            file_model.update_view(process_count)
 
             self.encode_file(curr_file)
 
             curr_file.set_complete()
-            file_model.updateView(process_count)
+            file_model.update_view(process_count)
 
             td = datetime.now() - start_timer
             mints = (td.total_seconds() / 60)

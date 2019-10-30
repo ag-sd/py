@@ -12,7 +12,7 @@ from Runtime import TaskRunner
 class Autocode(QMainWindow):
     def __init__(self, plugin_dir):
         super().__init__()
-        self.plugins = AutocodeUtils.get_available_encoders(plugin_dir)
+        self.plugins = [] #AutocodeUtils.get_available_encoders(plugin_dir)
 
         self.mainPanel = MainPanel()
         self.mainPanel.file_drop_event.connect(self.files_added)
@@ -42,7 +42,7 @@ class Autocode(QMainWindow):
         self.addDockWidget(Qt.TopDockWidgetArea, self.encoderOptions)
         self.addDockWidget(Qt.BottomDockWidgetArea, self.progress)
 
-        AutocodeUtils.load_settings(self, self.settings)
+        #AutocodeUtils.load_settings(self, self.settings)
         self.statusBar().showMessage('Ready')
         self.setWindowTitle('Autocode')
         self.show()

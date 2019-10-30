@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (QVBoxLayout,
                              QRadioButton,
                              QSpinBox)
 
-from CustomUI import FileChooser
+from CustomUI import FileChooserTextBox
 
 
 class MainPanel(QTableView):
@@ -79,7 +79,7 @@ class InputOptions(QDockWidget):
 class OutputOptions(QDockWidget):
     def __init__(self):
         super().__init__()
-        self.fileChooser = FileChooser("Output Dir: ", "Select output directory", True)
+        self.fileChooser = FileChooserTextBox("Output Dir: ", "Select output directory", True)
         self.fileChooser.setObjectName("stateful_fileChooser")
         self.dirStructure = QCheckBox("Preserve Directory Structure")
         self.dirStructure.setObjectName("stateful_dirStructure")

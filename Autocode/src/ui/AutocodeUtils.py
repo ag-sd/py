@@ -3,7 +3,7 @@ from os import path, walk, listdir
 
 from PyQt5.QtWidgets import QWidget, QCheckBox, QRadioButton, QGroupBox
 
-from CustomUI import FileChooser
+from CustomUI import FileChooserTextBox
 from FileItem import FileItem
 from Plugin import Plugin
 from FileItemModel import FileItemModel
@@ -41,7 +41,7 @@ def _add_supported_file_to_model(file_name, _path, supported_extensions, model, 
     #suffix, extension = path.splitext(file_name)
     #if supported_extensions.count(extension) > 0:
     entry = FileItem(file_name, _path, path.getsize(path.join(_path, file_name)))
-    model.appendRow(entry)
+    model.append_row(entry)
     #else:
     #    rejected_files.append(file_name)
 
@@ -79,7 +79,7 @@ def get_available_encoders(plugins_dir):
 
     return plugins
 
-
+# TODO Remove this code and depend on Common Utils
 def load_settings(ui, settings):
     """
     https://stackoverflow.com/questions/23279125/python-pyqt4-functions-to-save-and-restore-ui-widget-values
@@ -100,10 +100,10 @@ def load_settings(ui, settings):
                 obj.setChecked(value)
             elif type(obj) is QRadioButton or type(obj) is QGroupBox:
                 obj.setChecked(bool(value))
-            elif type(obj) is FileChooser:
+            elif type(obj) is FileChooserTextBox:
                 obj.setSelection(value)
 
-
+# TODO Remove this code and depend on Common Utils
 def save_settings(ui, settings):
     """
     https://stackoverflow.com/questions/23279125/python-pyqt4-functions-to-save-and-restore-ui-widget-values
@@ -119,12 +119,12 @@ def save_settings(ui, settings):
                 value = obj.checkState()
             elif type(obj) is QRadioButton or type(obj) is QGroupBox:
                 value = obj.isChecked()
-            elif type(obj) is FileChooser:
+            elif type(obj) is FileChooserTextBox:
                 value = obj.getSelection()
             settings.setValue(name, value)
             __logger.info("Saved %s: %s" % (name, value))
 
-
+# TODO Remove this code and depend on Common Utils
 def get_logger(appName):
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     ch = logging.StreamHandler()
