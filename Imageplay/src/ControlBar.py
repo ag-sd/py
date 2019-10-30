@@ -1,11 +1,11 @@
 from functools import partial
 
+import Imageplay
+import actions
 from PyQt5.QtCore import QTimer, QUrl, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QToolBar, QSizePolicy, QAction
-
-import Imageplay
-from Imageplay import SettingsKeys
-from Settings import SettingsDialog
+from Settings import SettingsDialog, SettingsKeys
+from actions.BaseEditAction import BaseEditAction
 from common.CommonUtils import FileScanner
 from model.Actions import ActionType
 
@@ -13,14 +13,11 @@ from model.Actions import ActionType
 class ControlBar(QToolBar):
     image_edit_complete_event = pyqtSignal(ActionType)
     image_edit_starting_event = pyqtSignal()
-    image_edit_event = pyqtSignal(ActionType)
-    image_zoom_event = pyqtSignal(float)
+    image_edit_event = pyqtSignal(BaseEditAction)
+    image_zoom_event = pyqtSignal(bool)
 
     __SZ_TRUE = "⊡"
     __SZ_FITS = "⊠"
-
-    # __EDIT_OK = "OK"
-    # __EDIT_CANCEL = "CANCEL"
 
     def __init__(self, playlist_model):
         super().__init__()
@@ -30,7 +27,6 @@ class ControlBar(QToolBar):
         self.loop_action = self.create_action(ActionType.LOOP)
         self.play_action = self.create_action(ActionType.PLAY)
         self.edit_action = self.create_action(ActionType.EDIT)
-        self.crop_action = self.create_action(ActionType.CROP)
         self.save_action = self.create_action(ActionType.SAVE)
         self.size_action = self.create_action(ActionType.SIZE)
         self.exit_action = self.create_action(ActionType.CANCEL)
@@ -58,40 +54,50 @@ class ControlBar(QToolBar):
             self.playlist_model.previous()
         elif action == ActionType.NEXT:
             self.playlist_model.next(Imageplay.settings.get_setting(SettingsKeys.shuffle, False))
+
         elif action == ActionType.LOOP:
             Imageplay.settings.apply_setting(SettingsKeys.loop, value_checked)
+
         elif action == ActionType.SHUFFLE:
             Imageplay.settings.apply_setting(SettingsKeys.shuffle, value_checked)
+
         elif action == ActionType.OPTIONS:
             SettingsDialog().exec()
+
         elif action == ActionType.PLAY:
             if value_checked:
                 self.playedSoFar = 0
-                self.zoom = 1.0
                 self.timer.start(Imageplay.settings.get_setting(SettingsKeys.image_delay, 2000))
             else:
                 self.timer.stop()
+
         elif action == ActionType.EDIT:
             self.set_editing_mode()
             self.image_edit_starting_event.emit()
-        elif action == ActionType.CROP:
-            self.image_edit_event.emit(action)
+
         elif action == ActionType.SAVE:
             self.image_edit_complete_event.emit(action)
             self.set_playing_mode()
+
         elif action == ActionType.CANCEL:
             self.image_edit_complete_event.emit(action)
             self.set_playing_mode()
+
         elif action == ActionType.SIZE:
             if value_checked:
                 self.size_action.setText(ControlBar.__SZ_FITS)
             else:
                 self.size_action.setText(ControlBar.__SZ_TRUE)
             Imageplay.settings.apply_setting(SettingsKeys.image_scaled, value_checked)
+
         elif action == ActionType.ZOOM_IN:
-            self.image_zoom_event.emit(1.10)
+            self.image_zoom_event.emit(True)
+
         elif action == ActionType.ZOOM_OUT:
-            self.image_zoom_event.emit(0.9)
+            self.image_zoom_event.emit(False)
+
+        elif isinstance(action, BaseEditAction):
+            self.image_edit_event.emit(action)
 
     def timeout(self):
         if self.playedSoFar >= self.playlist_model.rowCount(self):
@@ -146,7 +152,10 @@ class ControlBar(QToolBar):
         dummy = QWidget()
         dummy.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self.addAction(self.crop_action)
+        for action in actions.available_actions:
+            if action.trigger() is None:
+                action.triggered.connect(partial(self.action_event, action))
+            self.addAction(action)
         self.addSeparator()
         self.addAction(self.save_action)
         self.addAction(self.exit_action)

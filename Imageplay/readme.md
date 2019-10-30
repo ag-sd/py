@@ -37,7 +37,7 @@ Imageplay lets you run a slide-show of a collection of images. The slide-show ru
 - [ ] Add a small display on the thumbnail: format, resolution and size
 - [ ] Add which program is used to open a container### Changelog
 - [ ] Fix groups shouldn't disapear if only one image remains after a move
-
+-b /media/sheldon/Stuff/test/image.jpeg
 **Wed Mar 20 23:50:00 EDT 2019**
 - Duplicate Image Finder Multi-Threaded performance optimisations
 - Improved image display grid for duplicate images

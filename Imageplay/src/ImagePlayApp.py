@@ -32,10 +32,10 @@ class ImagePlayApp(QMainWindow):
 
         self.playlist_model.image_change_event.connect(self.imageView.set_image)
         self.playlist_model.image_change_event.connect(self.imageDetails.refresh_details)
-        self.playlistController.image_edit_event.connect(self.imageView.editEvent)
+        self.playlistController.image_edit_event.connect(self.imageView.image_edit_start)
         self.playlistController.image_edit_complete_event.connect(self.imageView.image_edit_complete)
-        self.playlistController.image_edit_starting_event.connect(self.image_editing_started)
-        self.playlistController.image_edit_complete_event.connect(self.image_editing_complete)
+        # self.playlistController.image_edit_complete_event.connect(self.image_editing_complete)
+        # self.playlistController.image_edit_starting_event.connect(self.image_editing_started)
         self.playlistController.image_zoom_event.connect(self.imageView.change_zoom)
 
         splitter_list = QSplitter(Qt.Horizontal)

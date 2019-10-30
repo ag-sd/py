@@ -67,7 +67,7 @@ class ActionType(Enum):
 
     EDIT = Action("𝐄", "Ctrl+E", "Edit image")
 
-    CROP = CropAction("◳", "Ctrl+O", "Crop Image")
+    # CROP = CropAction("◳", "Ctrl+O", "Crop Image")
 
     SAVE = Action("OK", "Ctrl+S", "Save Image and reload", icon=QIcon("resources/check.svg"))
     CANCEL = Action("Close", "Esc", "Discard Changes and reload", icon=QIcon("resources/close.svg"))

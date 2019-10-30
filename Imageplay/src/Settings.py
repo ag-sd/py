@@ -3,8 +3,6 @@ from enum import Enum, unique
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QDialog, QHBoxLayout, QSpinBox, QLabel, QVBoxLayout, QCheckBox
 
-import Imageplay
-
 
 @unique
 class SettingsKeys(Enum):
