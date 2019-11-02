@@ -1,5 +1,7 @@
 import logging
 import os
+import hashlib
+from os import path
 
 from PyQt5.QtCore import QObject, pyqtSignal, QSettings
 from PyQt5.QtWidgets import QCheckBox, QRadioButton, QGroupBox, QWidget, QSplitter
@@ -17,6 +19,17 @@ def get_logger(app_name):
     log.addHandler(ch)
     log.setLevel(logging.DEBUG)
     return log
+
+
+def calculate_sha256_hash(file):
+    block_size = 1048576  # (1MB) The size of each read from the file
+    file_hash = hashlib.sha256()
+    with open(file, 'rb') as f:
+        file_bytes = f.read(block_size)
+        while len(file_bytes) > 0:
+            file_hash.update(file_bytes)
+            file_bytes = f.read(block_size)
+    return file_hash.hexdigest()
 
 
 class AppSettings(QObject):
@@ -136,33 +149,73 @@ class FileScanner:
     A class to scan a collection of Qfile file URL's which may represent files or directories
     and create a list of files in this collection
     """
-    def __init__(self, file_urls, recurse=False, supported_extensions=None):
+    def __init__(self, file_urls, recurse=False, supported_extensions=None, is_qfiles=True):
         super().__init__()
-        self.supported_extensions = supported_extensions
+        self.supported_extensions = [x.upper() for x in supported_extensions]
         self.recurse = recurse
-        self.files = self._scan_files(file_urls, recurse)
+        if is_qfiles:
+            self.files, self.rejected_files = self._scan_q_files(file_urls, recurse)
+        else:
+            self.files, self.rejected_files = self._scan_p_files(file_urls, recurse)
 
-    def _scan_files(self, file_urls, recurse):
+    def _scan_p_files(self, file_urls, recurse):
+        """
+            Routine for finding all files in a directory
+            :param file_urls: the **PYTHON STRING** paths to find files in
+            :param recurse: Recurse into subdirectories
+            :return: List of files found in the path sorted in descending order of file size
+        """
+        rejected_files = []
+        dirs = []
+        files = []
+        for file in file_urls:
+            if path.isdir(file):
+                dirs.append(file)               # Save it if dir
+            elif self.is_supported(file):
+                files.append(file)              # Process it if a supported file
+            else:
+                rejected_files.append(file)     # Reject it if not a dir or supported file
+        return self._walk(dirs, files, [], recurse)
+
+    def _scan_q_files(self, file_urls, recurse):
+        """
+            Routine for finding all files in a directory
+            :param file_urls: the **PyQT5 QFile** paths to find files in
+            :param recurse: Recurse into subdirectories
+            :return: List of files found in the path sorted in descending order of file size
+        """
         dirs = []
         files = []
         for file in file_urls:
             if file.isLocalFile():
                 local_file = file.toLocalFile()
                 if os.path.isdir(local_file):
-                        dirs.append(local_file)
+                    dirs.append(local_file)
                 elif self.is_supported(local_file):
                     files.append(local_file)
 
+        # while len(dirs) > 0:
+        #     _dir = dirs.pop()
+        #     for dirName, _, fileList in os.walk(_dir, topdown=True):
+        #         for file in fileList:
+        #             if self.is_supported(file):
+        #                 files.append(os.path.join(dirName, file))
+        #         if not recurse:
+        #             break
+        return self._walk(dirs, files, [], recurse)
+
+    def _walk(self, dirs, files, rejects, recurse):
         while len(dirs) > 0:
             _dir = dirs.pop()
             for dirName, _, fileList in os.walk(_dir, topdown=True):
                 for file in fileList:
                     if self.is_supported(file):
                         files.append(os.path.join(dirName, file))
+                    else:
+                        rejects.append(os.path.join(dirName, file))
                 if not recurse:
                     break
-
-        return set(files)
+        return set(files), set(rejects)
 
     def is_supported(self, file):
         if self.supported_extensions is not None:
