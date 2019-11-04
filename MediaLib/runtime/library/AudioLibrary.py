@@ -1,21 +1,19 @@
 import os
+from collections import defaultdict
 
+import mutagen
 from mutagen.id3 import ID3
 
 import CommonUtils
 import MediaLib
-import mutagen
-
-from mutagen.easyid3 import EasyID3
 from CommonUtils import FileScanner
 
-EasyID3.RegisterTextKey('comment', 'COMM::eng')
 
 def supported_types():
     """
         List out all the types supported by this Library
     """
-    return _supported_types.copy()
+    return _supported_types_readers.keys()
 
 
 def scan_files(library_name, dirs_in_library, db_conn):
@@ -30,113 +28,202 @@ def scan_files(library_name, dirs_in_library, db_conn):
 
 
 def _extract_tags_and_save(library_name, files, db_conn):
+    inserts = []
     for file in files:
         _, ext = os.path.splitext(file)
         file_path, file_name = os.path.split(file)
         stats = os.stat(file)
-        params = (
-            library_name,
-            file_name,
-            file_path,
-            stats.st_size,
-            CommonUtils.calculate_sha256_hash(file),
-            stats.st_ctime,
-            stats.st_atime,
-        ) + _supported_types_readers[ext.lower()](file)
-        db_conn.execute("INSERT INTO audio VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", params)
+
+        params = defaultdict(lambda: None)
+        params[_param_library_name] = library_name
+        params[_param_file_name] = file_name
+        params[_param_file_path] = file_path
+        params[_param_file_size] = stats.st_size
+        params[_param_checksum] = CommonUtils.calculate_sha256_hash(file)
+        params[_param_created] = stats.st_ctime
+        params[_param_accessed] = stats.st_atime
+        params = _supported_types_readers[ext.lower()](file, params)
+        inserts.append(params)
+
+        MediaLib.logger.debug(f"Extracted the following data for audio file {params}")
+
+        if len(inserts) > _lib_insert_batch:
+            MediaLib.logger.debug(f"Inserting block of {len(inserts)} records")
+            db_conn.executemany(_lib_insert_sql, inserts)
+            inserts = []
+
+    if len(inserts):
+        MediaLib.logger.debug(f"Inserting final block of {len(inserts)} records")
+        db_conn.executemany(_lib_insert_sql, inserts)
 
 
-def _save_flac(file):
-    tag_data = mutagen.File(file, easy=True)
-    params = (
-        _read_or_default(tag_data.tags, 'album'),
-        _read_or_default(tag_data.tags, 'albumartist'),
-        _read_or_default(tag_data.tags, 'artist'),
-        _read_or_default(tag_data.tags, 'date'),
-        _read_or_default(tag_data.tags, 'genre'),
-        _read_or_default(tag_data.tags, 'title'),
-        _read_or_default(tag_data.tags, 'tracknumber'),
-        _read_or_default(tag_data.tags, 'comment'),
-        tag_data.info.channels,
-        tag_data.info.length,
-        tag_data.info.sample_rate,
-        tag_data.info.bitrate,
-        "Free Lossless Audio Codec (FLAC)",
-        None,
-        None,
-        tag_data.info.bits_per_sample,
-        tag_data.info.total_samples,
-    )
-    return params
-
-
-def _save_mp3(file):
-    #https://github.com/nex3/mdb
+def _save_mp3(file, params):
+    # https://github.com/nex3/mdb
     audio = ID3(file)
-    comment = None
     for key in audio.keys():
         if key.startswith('COMM'):
-            comment = audio.get(key, None)
+            params[_param_comment] = audio.get(key, None)
     tag_data = mutagen.File(file, easy=True)
-    params = (
-        _read_or_default(tag_data.tags, 'album'),
-        _read_or_default(tag_data.tags, 'albumartist'),
-        _read_or_default(tag_data.tags, 'artist'),
-        _read_or_default(tag_data.tags, 'date'),
-        _read_or_default(tag_data.tags, 'genre'),
-        _read_or_default(tag_data.tags, 'title'),
-        _read_or_default(tag_data.tags, 'tracknumber'),
-        comment,
-        tag_data.info.channels,
-        tag_data.info.length,
-        tag_data.info.sample_rate,
-        tag_data.info.bitrate,
-        tag_data.info.encoder_info,
-        tag_data.info.encoder_settings,
-        str(tag_data.info.bitrate_mode),
-        None,
-        None,
-    )
+    for key in sorted(tag_data.tags):
+        if _param_lookup.__contains__(key):
+            params[key] = tag_data.tags[key][0]
+
+    params[_param_channels] = tag_data.info.channels
+    params[_param_length] = tag_data.info.length
+    params[_param_sample_rate] = tag_data.info.sample_rate
+    params[_param_bitrate] = tag_data.info.bitrate
+    params[_param_encoder_info] = tag_data.info.encoder_info
+    params[_param_encoder_settings] = tag_data.info.encoder_settings
+    params[_param_bitrate_mode] = str(tag_data.info.bitrate_mode)
+
     return params
 
 
-
-def _save_mp4(file):
+def _save_flac(file, params):
     tag_data = mutagen.File(file, easy=True)
-    params = (
-        _read_or_default(tag_data.tags, 'album'),
-        _read_or_default(tag_data.tags, 'albumartist'),
-        _read_or_default(tag_data.tags, 'artist'),
-        _read_or_default(tag_data.tags, 'date'),
-        _read_or_default(tag_data.tags, 'genre'),
-        _read_or_default(tag_data.tags, 'title'),
-        _read_or_default(tag_data.tags, 'tracknumber'),
-        _read_or_default(tag_data.tags, 'comment'),
-        tag_data.info.channels,
-        tag_data.info.length,
-        tag_data.info.sample_rate,
-        tag_data.info.bitrate,
-        tag_data.info.codec,
-        tag_data.info.codec_description,
-        None,
-        tag_data.info.bits_per_sample,
-        None,
-    )
+    if tag_data.tags is not None:
+        for kvp in sorted(tag_data.tags):
+            key = kvp[0].lower()
+            if _param_lookup.__contains__(key):
+                params[key] = kvp[1]
+    params[_param_channels] = tag_data.info.channels
+    params[_param_length] = tag_data.info.length
+    params[_param_sample_rate] = tag_data.info.sample_rate
+    params[_param_bitrate] = tag_data.info.bitrate
+    params[_param_encoder_info] = "Free Lossless Audio Codec (FLAC)"
+    params[_param_bits_per_sample] = str(tag_data.info.bits_per_sample)
+    params[_param_total_samples] = str(tag_data.info.total_samples)
     return params
 
 
-def _read_or_default(tag, field):
-    if tag[field] is None:
-        print(field + "is null!!")
-        return None
-    print(f"value for {field} is {tag[field]} of type {type(tag[field])}")
-    return tag[field][0]
+def _save_ogg(file, params):
+    tag_data = mutagen.File(file, easy=True)
+    if tag_data.tags is not None:
+        for kvp in sorted(tag_data.tags):
+            key = kvp[0].replace(' ', '').lower()
+            if _param_lookup.__contains__(key):
+                params[key] = kvp[1]
+    params[_param_channels] = tag_data.info.channels
+    params[_param_length] = tag_data.info.length
+    params[_param_sample_rate] = tag_data.info.sample_rate
+    params[_param_bitrate] = tag_data.info.bitrate
+    params[_param_encoder_info] = ""
+    return params
 
 
+def _save_mp4(file, params):
+    tag_data = mutagen.File(file, easy=True)
+    if tag_data.tags is not None:
+        for key in sorted(tag_data.tags):
+            if _param_lookup.__contains__(key):
+                params[key] = tag_data.tags[key][0]
 
-_supported_types = [".mp3",".flac",".mp4"]
+    params[_param_channels] = tag_data.info.channels
+    params[_param_length] = tag_data.info.length
+    params[_param_sample_rate] = tag_data.info.sample_rate
+    params[_param_bitrate] = tag_data.info.bitrate
+    params[_param_encoder_info] = tag_data.info.codec
+    params[_param_encoder_settings] = tag_data.info.codec_description
+    params[_param_bits_per_sample] = str(tag_data.info.bits_per_sample)
+    return params
+
+
+def _save_wma(file, params):
+    tag_data = mutagen.File(file, easy=True)
+    if tag_data.tags is not None:
+        tags = tag_data.tags.as_dict()
+        if tags["IsVBR"][0].value:
+            params[_param_bitrate_mode] = "VBR"
+        else:
+            params[_param_bitrate_mode] = "Non-VBR"
+
+        for key in tags:
+            if _asf_key_map.__contains__(key):
+                value = tags[key][0].value
+                if value:
+                    params[_asf_key_map[key]] = value
+    params[_param_channels] = tag_data.info.channels
+    params[_param_length] = tag_data.info.length
+    params[_param_sample_rate] = tag_data.info.sample_rate
+    params[_param_bitrate] = tag_data.info.bitrate
+    params[_param_encoder_info] = tag_data.info.codec_name
+    params[_param_encoder_settings] = tag_data.info.codec_description
+
+    return params
+
+
 _supported_types_readers = {
     ".flac": _save_flac,
     ".mp3": _save_mp3,
-    ".mp4": _save_mp4
+    ".mp4": _save_mp4,
+    ".m4a": _save_mp4,
+    ".ogg": _save_ogg,
+    ".wma": _save_wma,
 }
+
+_asf_key_map = {
+    "WM/AlbumTitle": "album",
+    "Title": "title",
+    "Author": "artist",
+    "WM/AlbumArtist": "albumartist",
+    "WM/TrackNumber": "tracknumber",
+    "Description": "comment",
+    "WM/Year": "date",
+    "WM/Genre": "genre"
+}
+
+_param_album = 'album'
+_param_albumartist = 'albumartist'
+_param_artist = 'artist'
+_param_date = 'date'
+_param_genre = 'genre'
+_param_title = 'title'
+_param_tracknumber = 'tracknumber'
+_param_comment = 'comment'
+_param_channels = 'channels'
+_param_length = 'length'
+_param_sample_rate = 'sample_rate'
+_param_bitrate = 'bitrate'
+_param_bits_per_sample = 'bits_per_sample'
+_param_encoder_info = 'encoder_info'
+_param_encoder_settings = 'encoder_settings'
+_param_bitrate_mode = 'bitrate_mode'
+_param_total_samples = 'total_samples'
+_param_library_name = 'library'
+_param_file_name = 'file_name'
+_param_file_path = 'file_path'
+_param_file_size = 'file_size'
+_param_checksum = 'checksum'
+_param_created = 'created'
+_param_accessed = 'accessed'
+
+_param_lookup = [
+    _param_library_name,
+    _param_file_name,
+    _param_file_path,
+    _param_file_size,
+    _param_checksum,
+    _param_created,
+    _param_accessed,
+    _param_album,
+    _param_albumartist,
+    _param_artist,
+    _param_date,
+    _param_genre,
+    _param_title,
+    _param_tracknumber,
+    _param_comment,
+    _param_channels,
+    _param_length,
+    _param_sample_rate,
+    _param_bitrate,
+    _param_encoder_info,
+    _param_encoder_settings,
+    _param_bitrate_mode,
+    _param_bits_per_sample,
+    _param_total_samples,
+]
+
+_lib_insert_sql = f"INSERT INTO audio VALUES(:{', :'.join(_param_lookup)})"
+_lib_insert_batch = 10
+print(_lib_insert_sql)

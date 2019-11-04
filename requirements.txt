@@ -1,3 +1,4 @@
+mutagen==1.42.0
 PyQt5==5.11.3
 PyYAML==4.2b4
 sip==4.19.8

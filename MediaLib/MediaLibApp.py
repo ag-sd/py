@@ -1,23 +1,29 @@
 import sys
 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QSplitter
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QApplication, QMainWindow
 
 import MediaLib
 from MediaLib.runtime.library import LibraryManagement
+from MediaLib.ui.LibraryManager import LibraryManagerPanel
 
 
 class MediaLibApp(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.lib_Manager = LibraryManagerPanel()
         self.init_ui()
-        from random import randint
-        #"/mnt/Music/Running"
-        LibraryManagement.create_library("Test Library1"+str(randint(0, 1000)), "Audio", ["/mnt/Stuff/testing/audio",])
+        # from random import randint
+        # #"/mnt/Music/Running"
+        # # , ["/mnt/Stuff/testing/audio",])
+        # LibraryManagement.create_library("Test Library1"+str(randint(0, 1000)), "Audio",
+        #                                  ["C:\\Users\\sheld\\Downloads\\Test Library",])
 
     def init_ui(self):
         MediaLib.logger.debug("Initializing UI")
-        splitter = QSplitter()
-        self.setCentralWidget(splitter)
+        # splitter = QSplitter()
+        # self.setCentralWidget(splitter)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.lib_Manager)
         self.show()
         MediaLib.logger.debug("Initializing UI - Completed")
 
