@@ -56,7 +56,7 @@ class LibraryManagerPanel(QDockWidget):
 
     def refresh(self):
         lib = self.libraries[self.lib_selector.currentText()]
-        LibraryManagement.refresh_library(lib['name'])
+        LibraryManagement.refresh_library(lib)
         pass
 
     def _lib_changed(self):

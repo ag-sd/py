@@ -62,6 +62,21 @@ def refresh_library(library_name, dirs_in_library, db_conn):
     MediaLib.logger.info(f"{len(updates)} files require to be updated in library")
     MediaLib.logger.info(f"{len(inserts)} files require to be inserted in library")
     MediaLib.logger.info(f"{len(deletes)} files require to be deleted from library")
+    delete_files(library_name, list(updates.keys()) + list(deletes), db_conn)
+    insert_files(library_name, updates.update(inserts), db_conn)
+
+
+def get_files(library_name, db_conn):
+    MediaLib.logger.info(f"Fetching files in library {library_name}")
+    db_files = {}
+    results = db_conn.execute(
+        f"SELECT file_path || '{os.path.sep}' || file_name, checksum FROM audio WHERE library=? ORDER BY file_path",
+        [library_name])
+    for row in results:
+        db_files[row[0]] = row[1]
+
+    MediaLib.logger.info(f"Found {len(db_files)} records in the database")
+    return db_files
 
 
 def delete_files(library_name, files, db_conn):
@@ -75,6 +90,7 @@ def insert_files(library_name, files, db_conn):
     """
     Inserts the specified files into the database
     """
+    inserts = []
     for file in files:
         _, ext = os.path.splitext(file)
         file_path, file_name = os.path.split(file)
