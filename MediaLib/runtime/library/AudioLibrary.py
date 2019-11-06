@@ -1,5 +1,6 @@
 import os
 from collections import defaultdict
+from pprint import pprint
 
 import mutagen
 from mutagen.id3 import ID3
@@ -25,6 +26,83 @@ def scan_files(library_name, dirs_in_library, db_conn):
     MediaLib.logger.info(f"Found {len(files)} files to add to {library_name}")
     # Step 3: Extract all tags from the file into the database
     _extract_tags_and_save(library_name, files, db_conn)
+
+
+def refresh_library(library_name, dirs_in_library, db_conn):
+    """
+        Scans and updates all files in a library.
+    """
+    MediaLib.logger.info(f"Scanning audio library {library_name}")
+    # Step 1: Get the files of this library that are currently in the database
+    db_files = {}
+    results = db_conn.execute(f"SELECT file_path || {os.path.sep} || file_name, checksum from audio ORDER BY file_path")
+    for row in results:
+        db_files[row[0]]: row[1]
+
+    MediaLib.logger.info(f"Found {len(db_files)} records in the database")
+
+    # Step 2: Get the files of this library from the filesystem
+    fs_files = FileScanner(dirs_in_library, recurse=True, supported_extensions=supported_types(), is_qfiles=False).files
+
+    # Step 3: Compare the 2 data-sets and identify inserts, updates and deletes
+    updates = {}
+    inserts = {}
+    for file in fs_files:
+        db_checksum = db_files.pop(file)
+        fs_checksum = CommonUtils.calculate_sha256_hash(file)
+        if db_checksum is None:
+            # New file
+            inserts[file] = fs_checksum
+        elif db_checksum != fs_checksum:
+            # File exists in db but checksum is different. Update the file in database
+            updates[file] = fs_checksum
+    # What is left in the db needs to be deleted as it was not found in the filesystem
+    deletes = db_files.keys()
+
+    MediaLib.logger.info(f"{len(updates)} files require to be updated in library")
+    MediaLib.logger.info(f"{len(inserts)} files require to be inserted in library")
+    MediaLib.logger.info(f"{len(deletes)} files require to be deleted from library")
+
+
+def delete_files(library_name, files, db_conn):
+    """
+    Deletes the specified files from the database
+    """
+    pass
+
+
+def insert_files(library_name, files, db_conn):
+    """
+    Inserts the specified files into the database
+    """
+    for file in files:
+        _, ext = os.path.splitext(file)
+        file_path, file_name = os.path.split(file)
+        stats = os.stat(file)
+
+        params = defaultdict(lambda: None)
+        params[_param_library_name] = library_name
+        params[_param_file_name] = file_name
+        params[_param_file_path] = file_path
+        params[_param_file_size] = stats.st_size
+        params[_param_checksum] = CommonUtils.calculate_sha256_hash(file)
+        params[_param_created] = stats.st_ctime
+        params[_param_accessed] = stats.st_atime
+        params = _supported_types_readers[ext.lower()](file, params)
+        inserts.append(params)
+
+        MediaLib.logger.debug(f"Extracted the following data for audio file {params}")
+
+        if len(inserts) > _lib_insert_batch:
+            MediaLib.logger.debug(f"Inserting block of {len(inserts)} records")
+            db_conn.executemany(_lib_insert_sql, inserts)
+            inserts = []
+
+    if len(inserts):
+        MediaLib.logger.debug(f"Inserting final block of {len(inserts)} records")
+        db_conn.executemany(_lib_insert_sql, inserts)
+
+
 
 
 def _extract_tags_and_save(library_name, files, db_conn):
@@ -62,7 +140,9 @@ def _save_mp3(file, params):
     audio = ID3(file)
     for key in audio.keys():
         if key.startswith('COMM'):
-            params[_param_comment] = audio.get(key, None)
+            params[_param_comment] = audio.get(key).text[0]
+            print(key)
+            pprint(params)
     tag_data = mutagen.File(file, easy=True)
     for key in sorted(tag_data.tags):
         if _param_lookup.__contains__(key):

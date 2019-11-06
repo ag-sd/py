@@ -59,14 +59,24 @@ class FileChooserTextBox(QWidget):
         self.text.setText(selection)
 
 
-class _ListWidgetDragDrop(QListWidget):
-    def __init__(self, dirs_only):
+class ListWidgetDragDrop(QListWidget):
+    def __init__(self, dirs_only, items=None):
         super().__init__()
+        if items is not None:
+            for item in items:
+                self.addItem(item)
+
         self.setDragEnabled(True)
         self.setDragDropMode(QAbstractItemView.DragDrop)
         # self.viewport().setAcceptDrops(True)
         self.setDropIndicatorShown(True)
         self.dirs_only = dirs_only
+
+    def update_list(self, items):
+        self.clear()
+        if items is not None:
+            for item in items:
+                self.addItem(item)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls and self.isValidFiles(event.mimeData().urls()):
@@ -113,7 +123,7 @@ class FileChooserListBox(QWidget):
         self.dirs_only = dirs_only
         self.add_button = QPushButton("+")
         self.del_button = QPushButton("-")
-        self.list_box = _ListWidgetDragDrop(dirs_only)
+        self.list_box = ListWidgetDragDrop(dirs_only)
         self._initUI()
 
     def _initUI(self):
