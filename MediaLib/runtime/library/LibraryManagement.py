@@ -1,14 +1,14 @@
+import atexit
 import datetime
 import os
 import shutil
 import sqlite3
-import atexit
+from collections import defaultdict
 
 import CommonUtils
 import MediaLib
 from CommonUtils import FileScanner
 from MediaLib.runtime.library import AudioLibrary
-from collections import defaultdict
 
 
 def create_new_database():
@@ -29,6 +29,7 @@ def get_library(library_name):
     conn = db.cursor()
     lib = conn.execute("SELECT name, type, dirs, created, updated from library WHERE name = ?",
                        [library_name]).fetchone()
+    conn.close()
     if lib is None:
         return None
     else:
@@ -39,6 +40,13 @@ def get_library(library_name):
             "created": lib[3],
             "modifed": lib[4]
         }
+
+
+def get_group_keys(libary_type):
+    """
+    Returns the group keys for a library
+    """
+    return Library_Types[libary_type]['manager'].get_group_keys()
 
 
 def get_all_libraries():
@@ -56,14 +64,14 @@ def get_all_libraries():
                 "type": row[1],
                 "dirs": row[2].split('|'),
                 "created": row[3],
-                "modifed": row[4]
+                "updated": row[4]
             }
         )
     conn.close()
     return result_dict
 
 
-def create_library(library_name, library_type, dirs_in_library):
+def create_library(library_name, library_type, dirs_in_library, created=None, task_id=None):
     """
         Creates a library of the given name and type.
 
@@ -74,56 +82,83 @@ def create_library(library_name, library_type, dirs_in_library):
     conn = db.cursor()
 
     # Step 1: First create the library entry
-    params = (library_name, library_type, "|".join(dirs_in_library), "{:%Y-%m-%d %H:%M:%S}".format(datetime.datetime.now()))
+    if not created:
+        created = _get_time_string()
+    params = (library_name, library_type, "|".join(dirs_in_library), created)
     conn.execute("INSERT INTO library (name, type, dirs, created) VALUES (?,?,?,?)", params)
-
-    lib_manager = Library_Types[library_type]['manager']
-    refresh_library({
-        "name": library_name,
-        "type": library_type,
-        "dirs": dirs_in_library
-    })
-
-    # Step 2: Scan the dirs_in_library based on library_type
-    # Library_Types[library_type]['manager'].scan_files(library_name, dirs_in_library, db_conn=conn)
 
     conn.close()
     MediaLib.logger.info(f"Created library {library_name}")
 
+    # Step 2: Refresh the library
+    refresh_library({
+        "name": library_name,
+        "type": library_type,
+        "dirs": dirs_in_library
+    }, task_id=task_id)
 
-def update_library(library_name, dirs_in_library):
-    pass
+
+def delete_library(library, skip_file_deletes=False):
+    MediaLib.logger.info(f"Deleting {library['name']}")
+    conn = db.cursor()
+    # Step 1: Delete all files from the library
+    if not skip_file_deletes:
+        lib_manager = Library_Types[library['type']]['manager']
+        lib_manager.delete_library(library['name'], conn)
+
+    # Step 2: Delete the library entry
+    conn.execute("DELETE FROM library where name=?", [library['name']])
+    MediaLib.logger.info(f"Library deleted")
+    conn.close()
 
 
-def delete_library(library_name):
-    pass
+def update_library(library):
+    # Step 1: Delete the library, but not the files
+    delete_library(library, skip_file_deletes=True)
+
+    # Step 2: Refresh the library
+    create_library(library['name'], library['type'], library['dirs'], library['created'])
 
 
-def refresh_library(library):
+def refresh_library(library, task_id=None):
     """
     Updates a library by adding new files, removing non-existent files
     and updating changed files
-    :param library_name: The library to update
+    :param task_id:
+    :param library: The library to update
     :return:
     """
     MediaLib.logger.info(f"Refreshing {library['name']}")
-    # Step 1: Get the library details
     conn = db.cursor()
+    if task_id:
+        create_task(task_id, "Starting library refresh", 0, conn)
+    # Step 1: Get the library details
     lib_manager = Library_Types[library['type']]['manager']
 
     # Step 2: Get files in library that are in the database
     db_files = lib_manager.get_files(library['name'], conn)
+    MediaLib.logger.debug("DB files fetched...")
+    if task_id:
+        update_task(task_id, f"Scanning Medialib for files found {len(db_files)}", 10, conn)
 
     # Step 3: Get the files of this library from the filesystem
-    fs_files = FileScanner(library['dirs'], recurse=True,
-                           supported_extensions=lib_manager.supported_types(),
-                           is_qfiles=False).files
+    MediaLib.logger.debug("Scanning files in filesystem...")
+    scanner = FileScanner(library['dirs'], recurse=True, supported_extensions=lib_manager.supported_types(),
+                          is_qfiles=False)
+    fs_files = scanner.files
+    rejects = scanner.rejected_files
+    if task_id:
+        update_task(task_id, f"Scanning Filesystem for files, found {len(fs_files)}", 20, conn)
 
+    MediaLib.logger.debug("Comparing files now...")
     # Step 4: Compare the 2 data-sets and identify inserts, updates and deletes
     updates = {}
     inserts = {}
+    counter = 0
     for file in fs_files:
-        db_checksum = db_files.pop(file)
+        db_checksum = None
+        if file in db_files:
+            db_checksum = db_files.pop(file)
         fs_checksum = CommonUtils.calculate_sha256_hash(file)
         if db_checksum is None:
             # New file
@@ -131,25 +166,86 @@ def refresh_library(library):
         elif db_checksum != fs_checksum:
             # File exists in db but checksum is different. Update the file in database
             updates[file] = fs_checksum
+        counter = counter + 1
+        if task_id:
+            if counter % 10 == 0:
+                percent_30 = 20+int((counter * 30)/len(fs_files))
+                update_task(task_id, f"Comparing files in db and filesystem", percent_30, conn)
     # What is left in the db needs to be deleted as it was not found in the filesystem
     deletes = db_files.keys()
 
-    MediaLib.logger.info(f"{len(updates)} files require to be updated in library")
-    MediaLib.logger.info(f"{len(inserts)} files require to be inserted in library")
-    MediaLib.logger.info(f"{len(deletes)} files require to be deleted from library")
+    MediaLib.logger.info(f"{len(updates)} files to be updated in library")
+    if len(updates):
+        MediaLib.logger.debug("*********** Updated Files *********** \n" + "\n".join(updates) + "\n\n")
+    MediaLib.logger.info(f"{len(inserts)} files to be inserted in library")
+    if len(inserts):
+        MediaLib.logger.debug("*********** Inserted Files *********** \n" + "\n".join(inserts) + "\n\n")
+    MediaLib.logger.info(f"{len(deletes)} files to be deleted from library")
+    if len(deletes):
+        MediaLib.logger.debug("*********** Deleted Files *********** \n" + "\n".join(deletes) + "\n\n")
+    MediaLib.logger.info(f"{len(rejects)} files to be excluded from library")
+    if len(rejects):
+        MediaLib.logger.debug("*********** Rejected Files *********** \n" + "\n".join(rejects) + "\n\n")
 
     # Step 5: Insert the data
     lib_manager.delete_files(library['name'], list(updates.keys()) + list(deletes), conn)
-    lib_manager.insert_files(library['name'], updates.update(inserts), conn)
+    MediaLib.logger.info("Obsolete files deleted")
+    all_updates = updates.copy()
+    all_updates.update(inserts)
+    lib_manager.insert_files(library['name'], all_updates, conn, task_id=task_id)
+    MediaLib.logger.info("Updated files added")
 
+    conn.execute("UPDATE library set updated=? where name=?", (_get_time_string(), library['name']))
+    if task_id:
+        finish_task(task_id, "Completed", 100, conn)
     conn.close()
-    pass
+    MediaLib.logger.info("Complete")
+
+
+def get_task_status(task_id):
+    sql = "select status, status_message, percent_complete from tasks where task_id = ? order by seq_id desc limit 1"
+    conn = db.cursor()
+    result = conn.execute(sql, (task_id,)).fetchone()
+    conn.close()
+    return {
+        "status": result[0],
+        "status_message": result[1],
+        "percent_complete": result[2]
+    }
+
+
+def create_task(task_id, message, percent_complete, db_conn):
+    update_task(task_id, message, percent_complete, db_conn, status="STARTING")
+
+
+def finish_task(task_id, message, percent_complete, db_conn):
+    update_task(task_id, message, percent_complete, db_conn, status="COMPLETE")
+
+
+def fail_task(task_id, message, percent_complete, db_conn):
+    update_task(task_id, message, percent_complete, db_conn, status="FAILED")
+
+
+def update_task(task_id, message, percent_complete, db_conn, status="RUNNING"):
+    db_conn.execute("INSERT INTO tasks (task_id, status, status_message, percent_complete) VALUES (?, ?, ?, ?)",
+                    (task_id, status, message, percent_complete,))
+
+
+def get_available_library_types():
+    return set(Library_Types.keys())
 
 
 def close_database():
     db.commit()
     db.close()
     MediaLib.logger.info(f"Committed and closed {MediaLib.__APP_NAME__} library")
+    # MediaLib.logger.info("Waiting for all background tasks to complete")
+    # thread_pool_executor.shutdown()
+    # MediaLib.logger.info("Exiting")
+
+
+def _get_time_string():
+    return "{:%Y-%m-%d %H:%M:%S}".format(datetime.datetime.now())
 
 
 atexit.register(close_database)
@@ -168,5 +264,5 @@ if not os.path.exists(db_name):
     MediaLib.logger.warn("Media library not found. Creating new library from template")
     create_new_database()
 
-db = sqlite3.connect(db_name)
+db = sqlite3.connect(db_name, check_same_thread=False)
 db.isolation_level = None
