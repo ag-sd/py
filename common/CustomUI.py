@@ -1,7 +1,8 @@
 import os
 import sys
+from os import path
 
-from PyQt5.QtCore import (QDir, Qt, QUrl)
+from PyQt5.QtCore import (QDir, Qt, QUrl, QParallelAnimationGroup, QPropertyAnimation, QAbstractAnimation, pyqtSignal)
 from PyQt5.QtWidgets import \
     (QWidget,
      QLabel,
@@ -9,17 +10,21 @@ from PyQt5.QtWidgets import \
      QFileDialog,
      QPushButton,
      QHBoxLayout,
-     QApplication, QVBoxLayout, QListWidget, QListWidgetItem, QAbstractItemView)
+     QApplication, QVBoxLayout, QListWidget, QListWidgetItem, QAbstractItemView, QScrollArea, QFrame, QToolButton,
+     QSizePolicy)
 
 
 class FileChooserTextBox(QWidget):
 
-    def __init__(self, label, cue, _dir, lbl_align_right=False):
-        super().__init__()
+    file_selection_changed = pyqtSignal(str)
+
+    def __init__(self, label, cue, _dir, lbl_align_right=False, initial_selection=''):
+        super(FileChooserTextBox, self).__init__()
         self.label = label
         self.cue = cue
         self.dir = _dir
-        self.selection = ''
+        if path.exists(initial_selection):
+            self.selection = initial_selection
         self.text = QLineEdit()
         self.lbl_align_right = lbl_align_right
         self.initUI()
@@ -28,7 +33,7 @@ class FileChooserTextBox(QWidget):
         self.text.setReadOnly(True)
         self.text.setObjectName("txtAddress")
         button = QPushButton("...")
-        button.clicked.connect(lambda: self.browse_for_item(self.text))
+        button.clicked.connect(self.browse_for_item)
         width = button.fontMetrics().boundingRect("...").width() + 12
         button.setMaximumWidth(width)
         button.setMaximumHeight(self.text.height())
@@ -42,21 +47,28 @@ class FileChooserTextBox(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
-    def browse_for_item(self, text):
-        if self.dir:
-            file = QFileDialog.getExistingDirectory(caption=self.cue)
+    def browse_for_item(self):
+        if self.text.text() != '' and path.exists(self.text.text()):
+            initial_dir = path.dirname(self.text.text())
         else:
-            file, _filter = QFileDialog.getOpenFileName(caption=self.cue)
+            initial_dir = path.expanduser("~")
+
+        if self.dir:
+            file = QFileDialog.getExistingDirectory(self, self.cue, initial_dir, QFileDialog.ShowDirsOnly)
+        else:
+            file, _filter = QFileDialog.getOpenFileName(self, self.cue, initial_dir)
 
         self.selection = QDir.toNativeSeparators(file)
-        text.setText(self.selection)
+        self.text.setText(self.selection)
+        self.file_selection_changed.emit(self.selection)
 
     def getSelection(self):
         return self.selection
 
     def setSelection(self, selection):
-        self.selection = selection
-        self.text.setText(selection)
+        if path.exists(selection):
+            self.selection = selection
+            self.text.setText(selection)
 
 
 class ListWidgetDragDrop(QListWidget):
@@ -124,9 +136,14 @@ class FileChooserListBox(QWidget):
         self.add_button = QPushButton("+")
         self.del_button = QPushButton("-")
         self.list_box = ListWidgetDragDrop(dirs_only)
-        self._initUI()
+        self._init_ui()
 
-    def _initUI(self):
+    def add_items(self, paths):
+        for path in paths:
+            item = QListWidgetItem(path)
+            self.list_box.addItem(item)
+
+    def _init_ui(self):
         self.add_button.clicked.connect(self._add_items)
         self.del_button.clicked.connect(self._del_items)
         b_layout = QHBoxLayout()
@@ -160,13 +177,121 @@ class FileChooserListBox(QWidget):
         for i in range(self.list_box.count()):
             yield self.list_box.item(i).text()
 
+    def get_items(self):
+        items = []
+        for i in range(self.list_box.count()):
+            items.append(self.list_box.item(i).text())
+        return items
+
     def selection_as_qurls(self):
         for i in range(self.list_box.count()):
             yield QUrl.fromLocalFile(self.list_box.item(i).text())
 
 
+class CollapsibleWidget(QWidget):
+    def __init__(self, title="", parent=None, animation_duration=300):
+        """
+        References:
+            # Adapted from c++ version
+            http://stackoverflow.com/questions/32476006/how-to-make-an-expandable-collapsable-section-widget-in-qt
+        """
+        super(CollapsibleWidget, self).__init__(parent)
+        self.title = title
+        self.toggle_button = QToolButton()
+        self.toggle_animation = QParallelAnimationGroup(self)
+        self.content_area = QScrollArea()
+        self.animation_duration = animation_duration
+        self._init_base_ui()
+
+    def _init_base_ui(self):
+        self.toggle_button.setStyleSheet("QToolButton { border: none; }")
+        self.toggle_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.toggle_button.setArrowType(Qt.RightArrow)
+        self.toggle_button.pressed.connect(self.on_pressed)
+        self.toggle_button.setText(str(self.title))
+        self.toggle_button.setCheckable(True)
+        self.toggle_button.setChecked(False)
+
+        self.content_area.setMaximumHeight(0)
+        self.content_area.setMinimumHeight(0)
+        self.content_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.content_area.setFrameShape(QFrame.NoFrame)
+
+        self.toggle_animation.addAnimation(QPropertyAnimation(self, b"minimumHeight"))
+        self.toggle_animation.addAnimation(QPropertyAnimation(self, b"maximumHeight"))
+        self.toggle_animation.addAnimation(QPropertyAnimation(self.content_area, b"maximumHeight"))
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.toggle_button)
+        layout.addWidget(self.content_area)
+
+    def on_pressed(self):
+        checked = self.toggle_button.isChecked()
+        self.toggle_button.setArrowType(Qt.DownArrow if not checked else Qt.RightArrow)
+        self.toggle_animation.setDirection(QAbstractAnimation.Forward if not checked else QAbstractAnimation.Backward)
+        self.toggle_animation.start()
+
+    def set_content_layout(self, layout):
+        initial_layout = self.content_area.layout()
+        del initial_layout
+        self.content_area.setLayout(layout)
+        collapsed_height = (self.sizeHint().height() - self.content_area.maximumHeight())
+        content_height = layout.sizeHint().height()
+        for i in range(self.toggle_animation.animationCount()):
+            animation = self.toggle_animation.animationAt(i)
+            animation.setDuration(self.animation_duration)
+            animation.setStartValue(collapsed_height)
+            animation.setEndValue(collapsed_height + content_height)
+
+        content_animation = self.toggle_animation.animationAt(self.toggle_animation.animationCount() - 1)
+        content_animation.setDuration(self.animation_duration)
+        content_animation.setStartValue(0)
+        content_animation.setEndValue(content_height)
+
+    def set_content_widget(self, widget):
+        initial_layout = self.content_area.layout()
+        del initial_layout
+        self.content_area.setWidget(widget)
+        collapsed_height = (self.sizeHint().height() - self.content_area.maximumHeight())
+        content_height = widget.sizeHint().height()
+        for i in range(self.toggle_animation.animationCount()):
+            animation = self.toggle_animation.animationAt(i)
+            animation.setDuration(self.animation_duration)
+            animation.setStartValue(collapsed_height)
+            animation.setEndValue(collapsed_height + content_height)
+
+        content_animation = self.toggle_animation.animationAt(self.toggle_animation.animationCount() - 1)
+        content_animation.setDuration(self.animation_duration)
+        content_animation.setStartValue(0)
+        content_animation.setEndValue(content_height)
+
+
+class QHLine(QFrame):
+    def __init__(self):
+        super(QHLine, self).__init__()
+        self.setFrameShape(QFrame.HLine)
+        self.setFrameShadow(QFrame.Sunken)
+
+
+class QVLine(QFrame):
+    def __init__(self):
+        super(QVLine, self).__init__()
+        self.setFrameShape(QFrame.VLine)
+        self.setFrameShadow(QFrame.Sunken)
+
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    ex = FileChooserListBox("cue", True)
+    ex = CollapsibleWidget("Test Widget Fooo", animation_duration=150)
+    lay = QVBoxLayout()
+    for j in range(8):
+        label = QLabel("This is label # {}".format(j))
+        label.setAlignment(Qt.AlignCenter)
+        lay.addWidget(label)
+    w = QWidget()
+    w.setLayout(lay)
+    ex.set_content_widget(w)
     ex.show()
     sys.exit(app.exec_())

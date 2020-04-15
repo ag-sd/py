@@ -1,10 +1,10 @@
+import hashlib
 import logging
 import os
-import hashlib
 from os import path
 
 from PyQt5.QtCore import QObject, pyqtSignal, QSettings
-from PyQt5.QtWidgets import QCheckBox, QRadioButton, QGroupBox, QWidget, QSplitter
+from PyQt5.QtWidgets import QCheckBox, QRadioButton, QGroupBox, QWidget, QSplitter, QAction
 
 from common.CustomUI import FileChooserTextBox
 
@@ -30,6 +30,14 @@ def calculate_sha256_hash(file):
             file_hash.update(file_bytes)
             file_bytes = f.read(block_size)
     return file_hash.hexdigest()
+
+
+def create_toolbar_action(tooltip, icon, func):
+    action = QAction("")
+    action.setToolTip(tooltip)
+    action.setIcon(icon)
+    action.triggered.connect(func)
+    return action
 
 
 class AppSettings(QObject):
@@ -151,7 +159,10 @@ class FileScanner:
     """
     def __init__(self, file_urls, recurse=False, supported_extensions=None, is_qfiles=True):
         super().__init__()
-        self.supported_extensions = [x.upper() for x in supported_extensions]
+        if supported_extensions is not None:
+            self.supported_extensions = [x.upper() for x in supported_extensions]
+        else:
+            self.supported_extensions = None
         self.recurse = recurse
         if is_qfiles:
             self.files, self.rejected_files = self._scan_q_files(file_urls, recurse)
@@ -193,15 +204,6 @@ class FileScanner:
                     dirs.append(local_file)
                 elif self.is_supported(local_file):
                     files.append(local_file)
-
-        # while len(dirs) > 0:
-        #     _dir = dirs.pop()
-        #     for dirName, _, fileList in os.walk(_dir, topdown=True):
-        #         for file in fileList:
-        #             if self.is_supported(file):
-        #                 files.append(os.path.join(dirName, file))
-        #         if not recurse:
-        #             break
         return self._walk(dirs, files, [], recurse)
 
     def _walk(self, dirs, files, rejects, recurse):
