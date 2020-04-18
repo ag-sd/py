@@ -1,9 +1,11 @@
+import datetime
 import hashlib
 import logging
 import os
+import subprocess
 from os import path
 
-from PyQt5.QtCore import QObject, pyqtSignal, QSettings
+from PyQt5.QtCore import QObject, pyqtSignal, QSettings, QThread, QThreadPool
 from PyQt5.QtWidgets import QCheckBox, QRadioButton, QGroupBox, QWidget, QSplitter, QAction
 
 from common.CustomUI import FileChooserTextBox
@@ -30,6 +32,14 @@ def calculate_sha256_hash(file):
             file_hash.update(file_bytes)
             file_bytes = f.read(block_size)
     return file_hash.hexdigest()
+
+
+def human_readable_filesize(size, decimal_places=2):
+    for unit in ['B', 'KiB', 'MiB', 'GiB', 'TiB']:
+        if size < 1024.0:
+            break
+        size /= 1024.0
+    return f"{size:.{decimal_places}f}{unit}"
 
 
 def create_toolbar_action(tooltip, icon, func):
@@ -225,3 +235,89 @@ class FileScanner:
             return self.supported_extensions.__contains__(ext.upper())
         return True
 
+
+class ProcessRunnerException(Exception):
+    def __init__(self, cmd, exit_code, stdout, stderr):
+        self.cmd = cmd
+        self.exit_code = exit_code
+        self.stdout = stdout
+        self.stderr = stderr
+        self.message = "`{0}` exited with status {1}\n\nSTDOUT:\n{2}\n\nSTDERR:\n{3}".format(
+            self.cmd,
+            exit_code,
+            (stdout or b'').decode(),
+            (stderr or b'').decode()
+        )
+
+
+class ProcessRunner(object):
+    def __init__(self, command):
+        self.command = command
+
+    def run(self, stdout=None, stderr=None):
+        process = subprocess.Popen(
+            self.command,
+            stdin=subprocess.PIPE,
+            stdout=stdout,
+            stderr=stderr,
+            shell=True
+        )
+        out = process.communicate()
+
+        if process.returncode != 0:
+            raise ProcessRunnerException(self.command, process.returncode, out[0], out[1])
+
+        return out
+
+
+class CommandExecutionFactory(QThread):
+    finish_event = pyqtSignal('PyQt_PyObject', int)
+    result_event = pyqtSignal('PyQt_PyObject')
+
+    def __init__(self, runnable_commands):
+        super().__init__()
+        self.runnables = runnable_commands
+        self.runnable_count = len(self.runnables)
+        self.completed = []
+        self.thread_pool = QThreadPool()
+        self.stop = False
+        self.start_time = None
+
+    def stop_scan(self):
+        self.stop = True
+
+    def run(self):
+        self.start_time = datetime.datetime.now()
+        self._start_work()
+
+    def result_received(self, result):
+        self.result_event.emit(result)
+        self.completed.append(result)
+        self._start_work()
+
+    def is_running(self):
+        return self.thread_pool.activeThreadCount() > 0
+
+    def _start_work(self):
+        if len(self.runnables) > 0:
+            if self.stop:
+                print("Stop has been received. Exiting now!")
+                self.thread_pool.waitForDone()
+                if len(self.completed) == self.runnable_count + len(self.runnables):
+                    end_time = datetime.datetime.now()
+                    self.finish_event.emit(self.completed, (end_time - self.start_time).total_seconds())
+                return
+            active_threads = self.thread_pool.activeThreadCount()
+            available_threads = self.thread_pool.maxThreadCount() - active_threads
+            for i in range(0, min(available_threads, len(self.runnables))):
+                print("Dispatching to thread number " + str(i))
+                runnable = self.runnables.pop()
+                runnable.signals.result.connect(self.result_received)
+                runnable.setAutoDelete(True)
+                # Execute
+                self.thread_pool.start(runnable)
+        else:
+            self.thread_pool.waitForDone()
+            if len(self.completed) == self.runnable_count:
+                end_time = datetime.datetime.now()
+                self.finish_event.emit(self.completed, (end_time - self.start_time).total_seconds())
