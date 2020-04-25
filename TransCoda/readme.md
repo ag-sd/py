@@ -34,6 +34,12 @@ Trans:Coda lets you convert media from one format to another
   - [x] .ts</del>
 
 ### Changelog
+**Friday Apr 24 2020 (EDT)** 
+- Handle output file exists
+- Save input file dates on output file
+- `ffprobe` integration for advanced media information
+- Extended columns available
+
 **Saturday, April 18, 2020 (EDT)**
 - Duplicate Image Finder Multi-Threaded performance optimisations
 - Improved image display grid for duplicate images
