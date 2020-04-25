@@ -1,5 +1,5 @@
-# Trans:Coda - A ffmpeg based transcoder for audio files
-Trans:Coda lets you convert audio from one format to another
+# Trans:Coda - A ffmpeg based transcoder for media files
+Trans:Coda lets you convert media from one format to another
 
 ### Features
 * Drag and drop audio files into application
@@ -12,12 +12,26 @@ Trans:Coda lets you convert audio from one format to another
 - [x] Change status of files in encode list - (Change back to Ready or mark as complete)
 - [x] Show CPU, Thread and Memory statistics
 - [ ] Redirect STDERR to a file
-- [ ] Handle output file exists
+- [x] Add encoded ratio (Input fs vs Output fs)
+- [ ] Run process after execution
+- [ ] Option to wipe out tags after encode
+- [x] Handle output file exists
 - [x] Remove selected files from encode list
-- [ ] Save input file dates on output file
+- [x] Save input file dates on output file
 - [ ] Preserve encode list across application restart
-- [ ] Mutagen integration for advanced media information
+- [x] ~~Mutagen~~ `ffprobe` integration for advanced media information
 - [ ] Configure output directory by tags
+- [ ] Select multiple files
+- [x] Extended columns available
+- [ ] Column Sort
+- [ ] Configure Encoders from File
+<del>
+- [ ] Extended format support
+  - [x] .aac
+  - [x] .aiff
+  - [x] .amr
+  - [x] .opus
+  - [x] .ts</del>
 
 ### Changelog
 **Saturday, April 18, 2020 (EDT)**

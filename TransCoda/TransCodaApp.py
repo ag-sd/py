@@ -2,16 +2,59 @@ import sys
 
 import psutil
 from PyQt5 import QtCore
-from PyQt5.QtCore import (pyqtSignal, QSize)
+from PyQt5.QtCore import (pyqtSignal, QSize, QUrl)
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QMainWindow, QToolBar, \
     QFileDialog, QProgressBar, QMessageBox
 
 import CommonUtils
+import TransCoda
 from CommonUtils import CommandExecutionFactory
+from TransCoda import MediaMetaData
 from TransCoda.Encoda import EncodaCommand, EncodaStatus
-from TransCoda.MainPanel import MainPanel, OutputDirectoryNotSet, EncoderNotSelected
+from TransCoda.MainPanel import MainPanel, OutputDirectoryNotSet, EncoderNotSelected, ItemKeys
+from TransCoda.MediaMetaData import MetaDataFields
 from TransCoda.TransCodaSettings import TransCodaSettings
+
+
+class MetadataRetriever(CommonUtils.Command):
+    def __init__(self, input_files, batch_size=15):
+        self.files = input_files
+        self.batch_size = batch_size
+        super().__init__()
+
+    def do_work(self):
+        batch = []
+        for file in self.files:
+            metadata = MediaMetaData.get_metadata(file)
+            if not metadata:
+                continue
+            item = {
+                ItemKeys.input_file_name: file,
+                ItemKeys.input_bitrate: metadata[MetaDataFields.bit_rate],
+                ItemKeys.input_duration: metadata[MetaDataFields.duration],
+                ItemKeys.input_encoder: metadata[MetaDataFields.codec_long_name],
+                ItemKeys.input_file_size: metadata[MetaDataFields.size],
+                ItemKeys.sample_rate: metadata[MetaDataFields.sample_rate],
+                ItemKeys.channels: metadata[MetaDataFields.channels],
+            }
+            self.add_element(item, ItemKeys.artist, metadata, MetaDataFields.artist)
+            self.add_element(item, ItemKeys.album_artist, metadata, MetaDataFields.album_artist)
+            self.add_element(item, ItemKeys.title, metadata, MetaDataFields.title)
+            self.add_element(item, ItemKeys.album, metadata, MetaDataFields.album)
+            self.add_element(item, ItemKeys.track, metadata, MetaDataFields.track)
+            self.add_element(item, ItemKeys.genre, metadata, MetaDataFields.genre)
+            batch.append(item)
+            if len(batch) >= self.batch_size:
+                self.signals.result.emit(batch)
+                batch = []
+        if len(batch):
+            self.signals.result.emit(batch)
+
+    @staticmethod
+    def add_element(_dict, item_key, metadata, meta_key):
+        if meta_key in metadata:
+            _dict[item_key] = metadata[meta_key]
 
 
 class MainToolBar(QToolBar):
@@ -75,7 +118,7 @@ class TransCodaApp(QMainWindow):
         self.setCentralWidget(self.main_panel)
         self.statusBar().addPermanentWidget(self.progressbar)
         self.setMinimumSize(800, 600)
-        self.setWindowTitle("Trans:Coda")
+        self.setWindowTitle(TransCoda.__APP_NAME__)
         self.setWindowIcon(QIcon("resource/soundconverter.svg"))
         self.show()
 
@@ -115,11 +158,17 @@ class TransCodaApp(QMainWindow):
 
     def validate_and_start_encoding(self, run_index=None):
         runnables = []
+        overwrite_if_exists = TransCodaSettings.get_overwrite_if_exists()
+        preserve_timestamps = TransCodaSettings.get_preserve_timestamps()
         try:
             for index, (_input, _output, _command) in enumerate(self.main_panel.generate_commands()):
                 if run_index and index != run_index:
                     continue
-                runnable = EncodaCommand(input_file=_input, output_file=_output, command=_command)
+                runnable = EncodaCommand(input_file=_input,
+                                         output_file=_output,
+                                         command=_command,
+                                         overwrite_if_exists=overwrite_if_exists,
+                                         preserve_timestamps=preserve_timestamps)
                 runnable.signals.result.connect(self.result_received_event)
                 runnable.signals.status.connect(self.status_received_event)
                 runnables.append(runnable)
@@ -127,12 +176,12 @@ class TransCodaApp(QMainWindow):
             QMessageBox.critical(self, "Error! Output directory not selected",
                                  "Encoding cannot start because the output directory is not selected. "
                                  "You can select the output directory from Settings")
-            self.statusBar().showMessage("Error! Output directory not selected")
+            self.statusBar().showMessage("Error! Output directory not selected", msecs=400)
             return
         except EncoderNotSelected:
             QMessageBox.critical(self, "Error! Encoder not selected",
                                  "Encoding cannot start because the output encoder is not selected. "
-                                 "You can select the output encoder from Settings")
+                                 "You can select the output encoder from Settings", msecs=400)
             self.statusBar().showMessage("Error! Encoder not selected")
             return
 
@@ -143,30 +192,43 @@ class TransCodaApp(QMainWindow):
         self.progressbar.setValue(0)
         self.progressbar.setMaximum(len(runnables))
         self.main_panel.encoding_started(run_index)
-        self.executor = CommandExecutionFactory(runnables)
+        self.executor = CommandExecutionFactory(runnables, logger=TransCoda.logger)
         self.executor.finish_event.connect(self.jobs_complete_event)
         self.statusBar().showMessage(f"Dispatching {self.progressbar.maximum()} jobs for encoding")
         self.executor.start()
 
     def result_received_event(self, result):
-        self.main_panel.update_item(result)
-        self.progressbar.setValue(self.progressbar.value() + 1)
+        self.main_panel.update_items(result)
+        self.progressbar.setValue(self.progressbar.value() + len(result))
         self.update_status_bar()
 
-    def status_received_event(self, input_file, total_time, completed_time):
-        self.main_panel.update_item_percent_compete(input_file, total_time, completed_time)
+    def status_received_event(self, status):
+        self.main_panel.update_items([status])
         self.update_status_bar()
 
     def jobs_complete_event(self, all_results, time_taken):
         self.progressbar.setValue(self.progressbar.maximum())
         self.executor = None
-        self.statusBar().showMessage(f"Processed {len(all_results)} files in {time_taken} seconds")
+        self.statusBar().showMessage(f"Processed {len(all_results)} files in {time_taken} seconds", msecs=400)
+        self.set_window_title()
 
-    def files_changed_event(self, files_added, count_of_files):
-        if files_added:
-            self.statusBar().showMessage(f"{count_of_files} supported files were added to encode list")
-        else:
-            self.statusBar().showMessage(f"{count_of_files} files were removed from encode list")
+    def files_changed_event(self, is_added, files):
+        if is_added:
+            scanner = CommonUtils.FileScanner(files, recurse=True, is_qfiles=True)
+            qurls = []
+            for file in scanner.files:
+                qurls.append(QUrl(f"file://{file}"))
+            # Add files first
+            total_added = self.main_panel.add_qurls(qurls)
+            # Fetch and enrich with metadata
+            retriever = MetadataRetriever(scanner.files)
+            retriever.signals.result.connect(self.result_received_event)
+            # UX
+            self.progressbar.setValue(0)
+            self.progressbar.setMaximum(total_added)
+            self.executor = CommandExecutionFactory([retriever], logger=TransCoda.logger)
+            self.executor.finish_event.connect(self.jobs_complete_event)
+            self.executor.start()
 
     def update_status_bar(self):
         cpu = psutil.cpu_percent()
@@ -176,6 +238,14 @@ class TransCodaApp(QMainWindow):
             cpu = ""
         self.statusBar().showMessage(f"{self.progressbar.value()} files processed so far, "
                                      f"{self.progressbar.maximum() - self.progressbar.value()} files remaining. {cpu}")
+        self.set_window_title(cpu=cpu, progress=self.progressbar.text())
+        TransCoda.logger.info(self.statusBar().currentMessage())
+
+    def set_window_title(self, cpu=None, progress=None):
+        title = TransCoda.__APP_NAME__
+        title += " " + cpu if cpu else ""
+        title += " " + progress if progress else ""
+        self.setWindowTitle(title)
 
 
 def main():

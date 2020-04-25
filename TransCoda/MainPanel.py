@@ -1,15 +1,13 @@
 import os
+from collections import Mapping
 from enum import Enum
 from os import path
 
-import mutagen
 from PyQt5.QtCore import (Qt, pyqtSignal, QAbstractTableModel, QVariant, QFileInfo, QModelIndex, QMimeDatabase, QUrl)
 from PyQt5.QtGui import QIcon, QCursor
 from PyQt5.QtWidgets import QTableView, QAbstractItemView, QFileIconProvider, QMenu
 
 import CommonUtils
-from CommonUtils import human_readable_filesize, FileScanner
-from TransCoda import MediaMetaData
 from TransCoda.Encoda import EncodaStatus
 from TransCoda.TransCodaSettings import TransCodaSettings
 
@@ -23,27 +21,62 @@ class EncoderNotSelected(Exception):
 
 
 class ItemKeys(Enum):
-    input_file_name = "Input File"
-    input_file_type = "Type"
-    input_file_size = "Initial Size"
-    input_duration = "Duration"
-    input_bitrate = "Bitrate"
-    input_encoder = "Encoding"
-    output_file_dir = "Output Directory"
-    output_file_name = "output_file_name"
-    output_file_size = "Encoded File Size"
-    icon = "Icon",
-    status = "Status",
-    encoder = "Encoder"
-    messages = "Messages",
-    encoder_command = "Encoder Command"
-    percent_compete = "Percent Complete"
+    __headers__ = []
 
-    def __init__(self, display_name):
+    input_file_name = "Input File", True
+    input_file_type = "Type", True
+    input_file_size = "Initial Size", True
+    input_duration = "Duration", True
+    input_bitrate = "Bitrate", True
+    input_encoder = "Encoding", True
+    output_file_dir = "Output Directory", True
+    output_file_name = "output_file_name", False
+    output_file_size = "Encoded File Size", True
+    icon = "Icon", False
+    status = "Status", True
+    encoder = "Encoder", True
+    messages = "Messages", True
+    encoder_command = "Encoder Command", False
+    percent_compete = "Percent Complete", True
+    cpu_time = "CPU Time", True
+    compression_ratio = "Compression Ratio", True,
+    sample_rate = "Sample Rate", True
+    channels = "Channels", True
+    album_artist = "Album Artist", True
+    artist = "Artist", True
+    title = "Title", True
+    album = "Album", True
+    track = "Track", True
+    genre = "Genre", True
+
+    def __init__(self, display_name, header):
         self.display_name = display_name
+        if header:
+            self.__class__.__headers__.append(self)
 
 
 class MainPanel(QTableView):
+    class InterceptingDict(dict):
+        def __init__(self):
+            super().__init__()
+
+        def __setitem__(self, key, value):
+            if key == ItemKeys.input_file_size or key == ItemKeys.output_file_size:
+                value = CommonUtils.human_readable_filesize(value)
+            elif key == ItemKeys.input_bitrate:
+                value = f"{int(value)/1000:.{0}f} KBit/s"
+            elif key == ItemKeys.input_duration or key == ItemKeys.cpu_time:
+                value = CommonUtils.human_readable_time(value)
+            elif key == ItemKeys.compression_ratio:
+                value = f"{value:.{2}f}%"
+            super().__setitem__(key, value)
+
+        def update(self, other=None, **kwargs):
+            if other is not None:
+                for k, v in other.items() if isinstance(other, Mapping) else other:
+                    self[k] = v
+            for k, v in kwargs.items():
+                self[k] = v
 
     class FileItemModel(QAbstractTableModel):
         _value_not_set = "VALUE NOT SET"
@@ -52,13 +85,19 @@ class MainPanel(QTableView):
         def __init__(self):
             super().__init__()
             self.mime_database = QMimeDatabase()
+            self.executor = None
             self.file_items = []
             self.columnHeaders = [ItemKeys.input_file_name,
                                   ItemKeys.input_file_type,
                                   ItemKeys.input_file_size,
+                                  ItemKeys.input_bitrate,
+                                  ItemKeys.input_duration,
+                                  ItemKeys.input_encoder,
                                   ItemKeys.output_file_dir,
                                   ItemKeys.encoder,
                                   ItemKeys.output_file_size,
+                                  ItemKeys.compression_ratio,
+                                  ItemKeys.cpu_time,
                                   ItemKeys.percent_compete]
 
         def rowCount(self, parent):
@@ -129,35 +168,40 @@ class MainPanel(QTableView):
                 model_index_to = self.createIndex(index, len(self.columnHeaders))
                 self.dataChanged.emit(model_index_from, model_index_to, [Qt.DisplayRole, Qt.BackgroundRole])
 
-        def update_item(self, file_data):
-            for index, item in enumerate(self.file_items):
-                if item[ItemKeys.input_file_name] == file_data[ItemKeys.input_file_name]:
-                    item[ItemKeys.status] = file_data[ItemKeys.status]
-                    item[ItemKeys.messages] = file_data[ItemKeys.messages]
-                    if path.exists(file_data[ItemKeys.output_file_name]):
-                        item[ItemKeys.output_file_size] = \
-                            human_readable_filesize(path.getsize(file_data[ItemKeys.output_file_name]))
+        def update_items(self, item_data):
+            for item in item_data:
+                index = self.find_item(item[ItemKeys.input_file_name])
+                if index is not None:
+                    file_item = self.file_items[index]
+                    file_item.update(item)
                     model_index_from = self.createIndex(index, 0)
                     model_index_to = self.createIndex(index, len(self.columnHeaders))
                     self.dataChanged.emit(model_index_from, model_index_to, [Qt.DisplayRole, Qt.BackgroundRole])
-                    # Do not process the rest of the list
-                    return
-
-        def update_item_percent_compete(self, input_file_name, total_time, completed_time):
-            for index, item in enumerate(self.file_items):
-                if item[ItemKeys.input_file_name] == input_file_name:
-                    item[ItemKeys.percent_compete] = f"{(completed_time/total_time * 100):.2f}%"
-                    model_index_from = self.createIndex(index, 0)
-                    model_index_to = self.createIndex(index, len(self.columnHeaders))
-                    self.dataChanged.emit(model_index_from, model_index_to, [Qt.DisplayRole])
-                    # Do not process the rest of the list
-                    return
 
         def update_item_status(self, item_index, new_status):
             model_index_from = self.createIndex(item_index, 0)
             model_index_to = self.createIndex(item_index, len(self.columnHeaders))
             self.file_items[item_index][ItemKeys.status] = new_status
             self.dataChanged.emit(model_index_from, model_index_to, [Qt.BackgroundRole])
+
+        def get_columns(self):
+            return self.columnHeaders
+
+        def add_column(self, column):
+            self.beginInsertColumns(QModelIndex(), len(self.columnHeaders), len(self.columnHeaders))
+            self.columnHeaders.append(column)
+            self.endInsertColumns()
+
+        def remove_column(self, column):
+            del_index = -1
+            for index, col in enumerate(self.columnHeaders):
+                if col == column:
+                    del_index = index
+                    break
+            if del_index >= 0:
+                self.beginRemoveColumns(QModelIndex(), del_index, del_index)
+                del(self.columnHeaders[del_index])
+                self.endRemoveColumns()
 
         def generate_commands(self):
             for file_item in self.file_items:
@@ -180,20 +224,17 @@ class MainPanel(QTableView):
             for q_url in urls:
                 local_file = q_url.toLocalFile()
 
-                tag_data = MediaMetaData.get_metatadata(local_file)
-                if not os.path.isdir(local_file) and tag_data is not None:
+                if not os.path.isdir(local_file) and self.find_item(local_file) is None:
                     info = QFileInfo(local_file)
-                    item = {
-                        ItemKeys.input_file_name: local_file,
-                        ItemKeys.input_file_size: human_readable_filesize(info.size()),
-                        ItemKeys.input_file_type: self.mime_database.mimeTypeForFile(local_file).name(),
-                        ItemKeys.icon: QFileIconProvider().icon(info),
-                        ItemKeys.status: EncodaStatus.READY,
-                        # ItemKeys.input_bitrate: tag_data.info.bitrate,
-                        # ItemKeys.input_duration: tag_data.info.length,
-                        # if hasattr(tag_data.info, "codec"):
-                        #     ItemKeys.input_encoder: tag_data.info.codec
-                    }
+                    mime = self.mime_database.mimeTypeForFile(local_file).name().upper()
+                    if not(mime.startswith("AUDIO") or mime.startswith("VIDEO")):
+                        continue
+                    item = MainPanel.InterceptingDict()
+                    item[ItemKeys.input_file_name] = local_file
+                    item[ItemKeys.input_file_type] = self.mime_database.mimeTypeForFile(local_file).name()
+                    item[ItemKeys.icon] = QFileIconProvider().icon(info)
+                    item[ItemKeys.status] = EncodaStatus.READY
+
                     self.set_output_details(item)
                     items_to_add.append(item)
             return items_to_add
@@ -220,7 +261,13 @@ class MainPanel(QTableView):
 
             return file_item
 
-    files_changed_event = pyqtSignal(bool, int)
+        def find_item(self, fname):
+            for index, item in enumerate(self.file_items):
+                if item[ItemKeys.input_file_name] == fname:
+                    return index
+            return None
+
+    files_changed_event = pyqtSignal(bool, 'PyQt_PyObject')
     menu_item_event = pyqtSignal(str, int)
 
     def __init__(self):
@@ -233,6 +280,8 @@ class MainPanel(QTableView):
         self.verticalHeader().hide()
         self.horizontalHeader().setHighlightSections(False)
         self.horizontalHeader().setSectionsMovable(True)
+        self.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.horizontalHeader().customContextMenuRequested.connect(self.get_header_context_menu)
         self.file_model = None
         self.clear_table()
         TransCodaSettings.settings_container.settings_change_event.connect(self.settings_changed)
@@ -269,7 +318,7 @@ class MainPanel(QTableView):
 
     def dropEvent(self, event):
         if event.mimeData().hasUrls:
-            self.add_files(event.mimeData().urls())
+            self.files_changed_event.emit(True, event.mimeData().urls())
         else:
             event.ignore()
 
@@ -277,18 +326,15 @@ class MainPanel(QTableView):
         if self.selectedIndexes() and self.selectedIndexes()[0].row() >= 0:
             self.menu.exec(QCursor.pos())
 
-    def add_files(self, files):
-        scanner = FileScanner(files, recurse=True, is_qfiles=True)
-        files_to_add = []
-        for file in scanner.files:
-            files_to_add.append(QUrl(f"file://{file}"))
-        total_items_added = self.file_model.add_rows(files_to_add)
+    def add_qurls(self, qurls):
+        total_added = self.file_model.add_rows(qurls)
         self.file_model.layoutChanged.emit()
         self.adjust_columns()
-        self.files_changed_event.emit(True, total_items_added)
+        return total_added
 
     def remove_files(self, indices):
         self.file_model.remove_rows(indices)
+        self.files_changed_event.emit(False, len(indices))
 
     def clear_table(self):
         self.file_model = MainPanel.FileItemModel()
@@ -304,22 +350,44 @@ class MainPanel(QTableView):
     def encoding_started(self, run_index):
         self.file_model.encoding_started(run_index)
 
-    def update_item(self, file_data):
-        self.file_model.update_item(file_data)
-
-    def update_item_percent_compete(self, input_file_name, total_time, completed_time):
-        self.file_model.update_item_percent_compete(input_file_name, total_time, completed_time)
+    def update_items(self, file_data):
+        self.file_model.update_items(file_data)
+        self.adjust_columns()
 
     def update_item_status(self, item_index, new_status):
         self.file_model.update_item_status(item_index, new_status)
 
     def settings_changed(self, setting, value):
-        print(f"Setting {setting} changed to {value}")
         self.file_model.refresh_all_output_details()
 
     def menu_item_selected(self, item_name):
         selected = self.selectedIndexes()
         if selected and selected[0].row() >= 0:
             self.menu_item_event.emit(item_name, selected[0].row())
+
+    def get_header_context_menu(self, event):
+        # Get Available Headers
+        available = sorted(ItemKeys.__headers__, key=lambda key: key.display_name)
+        # Get Selected Headers
+        selected = self.file_model.get_columns()
+        # Build Menu
+        menu = QMenu()
+        for column in available:
+            checked = selected.__contains__(column)
+            menu.addAction(CommonUtils.create_action(self, column.display_name,
+                                                     self.column_header_selection, checked=checked))
+        menu.exec(QCursor.pos())
+
+    def column_header_selection(self, item_name):
+        for column in self.file_model.get_columns():
+            if column.display_name == item_name:
+                # Remove
+                self.file_model.remove_column(column)
+                return
+        # if column was not found, add it
+        for column in ItemKeys:
+            if column.display_name == item_name:
+                self.file_model.add_column(column)
+                return
 
 

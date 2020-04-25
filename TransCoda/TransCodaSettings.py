@@ -4,6 +4,7 @@ from functools import partial
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QDialog, QCheckBox, QComboBox, QDialogButtonBox, QLabel, QVBoxLayout
 
+import TransCoda
 from CommonUtils import AppSettings
 from CustomUI import FileChooserTextBox, QHLine
 from TransCoda.Encoda import Encoders
@@ -78,9 +79,7 @@ class TransCodaSettings(QDialog):
     settings_container = settings
 
     def set_setting(self, setting, value):
-        print(f"{setting} -> {value}")
-        if setting == SettingsKeys.encoder:
-            print(self.encoder.currentData())
+        TransCoda.logger.info(f"{setting} -> {value}")
         settings.apply_setting(setting, value)
 
     @staticmethod
@@ -104,6 +103,16 @@ class TransCodaSettings(QDialog):
 
     @staticmethod
     def get_preserve_dir():
-        return TransCodaSettings.settings_container.get_setting(SettingsKeys.preserve_dir, False)
+        return TransCodaSettings.settings_container.get_setting(SettingsKeys.preserve_dir, Qt.Checked) == Qt.Checked
+
+    @staticmethod
+    def get_overwrite_if_exists():
+        return TransCodaSettings.settings_container.get_setting(SettingsKeys.overwrite_files, Qt.Checked) == Qt.Checked
+
+    @staticmethod
+    def get_preserve_timestamps():
+        return TransCodaSettings.settings_container.get_setting(SettingsKeys.preserve_times, Qt.Checked) == Qt.Checked
+
+
 
 
