@@ -26,11 +26,11 @@ Trans:Coda lets you convert media from one format to another
 - [ ] Column Sort
 - [ ] Configure Encoders from File
 <del>
-- [ ] Extended format support
-  - [x] .aac
-  - [x] .aiff
-  - [x] .amr
-  - [x] .opus
+- [ ] Extended format support<br>
+  - [x] .aac<br>
+  - [x] .aiff<br>
+  - [x] .amr<br>
+  - [x] .opus<br>
   - [x] .ts</del>
 
 ### Changelog
