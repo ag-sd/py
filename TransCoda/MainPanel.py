@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import QTableView, QAbstractItemView, QFileIconProvider, QM
 
 import CommonUtils
 from TransCoda.Encoda import EncodaStatus
-from TransCoda.TransCodaSettings import TransCodaSettings
+from TransCoda.TransCodaSettings import TransCodaSettings, SettingsKeys
 
 
 class OutputDirectoryNotSet(Exception):
@@ -136,12 +136,7 @@ class MainPanel(QTableView):
 
         def add_rows(self, urls):
             items_to_add = self.create_entries(urls)
-            last_index = len(self.file_items)
-            self.beginInsertRows(QModelIndex(), last_index, last_index + len(items_to_add))
-            for item in items_to_add:
-                self.file_items.append(item)
-            self.endInsertRows()
-            return len(items_to_add)
+            return self.set_items(items_to_add)
 
         def remove_rows(self, indices):
             for index in indices:
@@ -149,12 +144,33 @@ class MainPanel(QTableView):
                 del(self.file_items[index])
                 self.endRemoveRows()
 
-        def get_item(self, index, item_type):
-            return self.file_items[index][item_type]
+        def get_items(self, index=None, item_type=None):
+            if index is not None:
+                return self.file_items[index][item_type]
+            else:
+                items_copy = []
+                for item in self.file_items:
+                    copy = item.copy()
+                    del(copy[ItemKeys.icon])
+                    items_copy.append(copy)
+                return items_copy
+
+        def set_items(self, items_to_add):
+            last_index = len(self.file_items)
+            self.beginInsertRows(QModelIndex(), last_index, last_index + len(items_to_add))
+            for item in items_to_add:
+                # This cannot be pickled, so add it separately
+                info = QFileInfo(item[ItemKeys.input_file_name])
+                item[ItemKeys.icon] = QFileIconProvider().icon(info)
+                self.file_items.append(item)
+            self.endInsertRows()
+            return len(items_to_add)
 
         def encoding_started(self, run_index):
             for index, item in enumerate(self.file_items):
                 if run_index and index != run_index:
+                    continue
+                if item[ItemKeys.status] != EncodaStatus.READY:
                     continue
                 item[ItemKeys.status] = EncodaStatus.WAITING
                 model_index_from = self.createIndex(index, 0)
@@ -225,14 +241,14 @@ class MainPanel(QTableView):
                 local_file = q_url.toLocalFile()
 
                 if not os.path.isdir(local_file) and self.find_item(local_file) is None:
-                    info = QFileInfo(local_file)
+                    # info = QFileInfo(local_file)
                     mime = self.mime_database.mimeTypeForFile(local_file).name().upper()
                     if not(mime.startswith("AUDIO") or mime.startswith("VIDEO")):
                         continue
                     item = MainPanel.InterceptingDict()
                     item[ItemKeys.input_file_name] = local_file
                     item[ItemKeys.input_file_type] = self.mime_database.mimeTypeForFile(local_file).name()
-                    item[ItemKeys.icon] = QFileIconProvider().icon(info)
+                    # item[ItemKeys.icon] = QFileIconProvider().icon(info)
                     item[ItemKeys.status] = EncodaStatus.READY
 
                     self.set_output_details(item)
@@ -350,6 +366,12 @@ class MainPanel(QTableView):
     def encoding_started(self, run_index):
         self.file_model.encoding_started(run_index)
 
+    def get_items(self, index=None, item_type=None):
+        return self.file_model.get_items(index, item_type)
+
+    def set_items(self, items):
+        self.file_model.set_items(items)
+
     def update_items(self, file_data):
         self.file_model.update_items(file_data)
         self.adjust_columns()
@@ -358,7 +380,12 @@ class MainPanel(QTableView):
         self.file_model.update_item_status(item_index, new_status)
 
     def settings_changed(self, setting, value):
-        self.file_model.refresh_all_output_details()
+        valid_keys = {SettingsKeys.output_dir,
+                      SettingsKeys.preserve_dir,
+                      SettingsKeys.encoder}
+        if setting in valid_keys:
+            self.file_model.refresh_all_output_details()
+            TransCodaSettings.save_encode_list(self.file_model.get_items())
 
     def menu_item_selected(self, item_name):
         selected = self.selectedIndexes()

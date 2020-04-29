@@ -18,7 +18,7 @@ Trans:Coda lets you convert media from one format to another
 - [x] Handle output file exists
 - [x] Remove selected files from encode list
 - [x] Save input file dates on output file
-- [ ] Preserve encode list across application restart
+- [x] Preserve encode list across application restart
 - [x] ~~Mutagen~~ `ffprobe` integration for advanced media information
 - [ ] Configure output directory by tags
 - [ ] Select multiple files

@@ -1,3 +1,4 @@
+import pickle
 from enum import Enum, unique
 from functools import partial
 
@@ -17,6 +18,7 @@ class SettingsKeys(Enum):
     encoder = "encoder"
     overwrite_files = "overwrite_existing"
     preserve_times = "preserve_times"
+    encode_list = "encode_list"
 
 
 settings = AppSettings(
@@ -112,6 +114,18 @@ class TransCodaSettings(QDialog):
     @staticmethod
     def get_preserve_timestamps():
         return TransCodaSettings.settings_container.get_setting(SettingsKeys.preserve_times, Qt.Checked) == Qt.Checked
+
+    @staticmethod
+    def save_encode_list(items):
+        items_pickle = pickle.dumps(items)
+        TransCodaSettings.settings_container.apply_setting(SettingsKeys.encode_list, items_pickle)
+
+    @staticmethod
+    def get_encode_list():
+        items_pickle = TransCodaSettings.settings_container.get_setting(SettingsKeys.encode_list)
+        if items_pickle:
+            return pickle.loads(items_pickle)
+        return []
 
 
 

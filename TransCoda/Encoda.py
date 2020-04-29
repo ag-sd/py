@@ -11,6 +11,7 @@ from PyQt5.QtCore import pyqtSignal, QObject
 from PyQt5.QtGui import QColor, QBrush
 
 import CommonUtils
+import TransCoda
 
 
 class Encoders(Enum):
@@ -44,14 +45,17 @@ class Encoders(Enum):
 
 
 class EncodaStatus(Enum):
-    READY = QBrush(QColor(176, 224, 230, 0))
-    WAITING = QBrush(QColor(175, 238, 238, 75))
-    SUCCESS = QBrush(QColor(152, 251, 152, 75))
-    ERROR = QBrush(QColor(255, 192, 203, 75))
-    IN_PROGRESS = QBrush(QColor(244, 164, 96, 75))
+    READY = 176, 224, 230, 0
+    WAITING = 255, 140, 0, 50
+    SUCCESS = 152, 251, 152, 75
+    ERROR = 220, 20, 60, 75
+    IN_PROGRESS = 244, 164, 96, 75
 
-    def __init__(self, brush):
-        self.brush = brush
+    def __init__(self, r, g, b, a):
+        self.brush = QBrush(QColor(r, g, b, a))
+
+    def __str__(self):
+        return self.name
 
 
 class EncodaCommand(CommonUtils.Command):
@@ -73,7 +77,7 @@ class EncodaCommand(CommonUtils.Command):
         # Ensure output path exists
         path, _ = os.path.split(self.output_file)
         # Overwrite if exists only
-        if self.overwrite_if_exists and os.path.exists(self.output_file):
+        if os.path.exists(self.output_file) and not self.overwrite_if_exists:
             cpu_time = (datetime.datetime.now() - start_time).total_seconds()
             self.signals.result.emit(
                 [self.create_result("", EncodaStatus.ERROR, f"{self.output_file} exists", cpu_time, 0, 0)])
@@ -94,15 +98,21 @@ class EncodaCommand(CommonUtils.Command):
             ffmpeg.run()
             cpu_time = (datetime.datetime.now() - start_time).total_seconds()
             output_stat = os.stat(self.output_file)
-            ratio = (output_stat.st_size / input_stat.st_size) * 100
+            ratio = 100 - (output_stat.st_size / input_stat.st_size) * 100
             if self.preserve_timestamps:
                 os.utime(self.output_file, (input_stat.st_atime, input_stat.st_mtime))
             self.signals.result.emit(
                 [self.create_result(cmd, EncodaStatus.SUCCESS,
-                                    f"Time taken f{cpu_time}", cpu_time, ratio, output_stat.st_size)])
+                                    f"Time taken {CommonUtils.human_readable_time(cpu_time)}",
+                                    cpu_time, ratio, output_stat.st_size)])
         except CommonUtils.ProcessRunnerException as e:
             cpu_time = (datetime.datetime.now() - start_time).total_seconds()
+            TransCoda.logger.error(e)
             self.signals.result.emit([self.create_result(cmd, EncodaStatus.ERROR, e.message, cpu_time, 0, 0)])
+        except Exception as g:
+            cpu_time = (datetime.datetime.now() - start_time).total_seconds()
+            TransCoda.logger.error(g)
+            self.signals.result.emit([self.create_result(cmd, EncodaStatus.ERROR, g.__cause__, cpu_time, 0, 0)])
 
     def status_event(self, _file, total, completed):
         from TransCoda.MainPanel import ItemKeys
@@ -189,4 +199,3 @@ class FFMPEGProcessRunner(QObject):
     def get_seconds(string):
         h, m, s = string.split(':')
         return int(datetime.timedelta(hours=int(h), minutes=int(m), seconds=int(s)).total_seconds())
-

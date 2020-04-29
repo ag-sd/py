@@ -1,3 +1,4 @@
+import os
 import sys
 
 import psutil
@@ -9,7 +10,6 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QToolBar, \
 
 import CommonUtils
 import TransCoda
-from CommonUtils import CommandExecutionFactory
 from TransCoda import MediaMetaData
 from TransCoda.Encoda import EncodaCommand, EncodaStatus
 from TransCoda.MainPanel import MainPanel, OutputDirectoryNotSet, EncoderNotSelected, ItemKeys
@@ -111,6 +111,7 @@ class TransCodaApp(QMainWindow):
         self.init_ui()
 
     def init_ui(self):
+        self.main_panel.set_items(TransCodaSettings.get_encode_list())
         self.main_panel.files_changed_event.connect(self.files_changed_event)
         self.main_panel.menu_item_event.connect(self.menu_event)
         self.tool_bar.button_pressed.connect(self.toolbar_event)
@@ -119,7 +120,7 @@ class TransCodaApp(QMainWindow):
         self.statusBar().addPermanentWidget(self.progressbar)
         self.setMinimumSize(800, 600)
         self.setWindowTitle(TransCoda.__APP_NAME__)
-        self.setWindowIcon(QIcon("resource/soundconverter.svg"))
+        self.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), "resource/soundconverter.svg")))
         self.show()
 
     def toolbar_event(self, event_name):
@@ -130,11 +131,13 @@ class TransCodaApp(QMainWindow):
         elif event_name == "Add Directory":
             _dir = QFileDialog.getExistingDirectoryUrl(caption="Select a directory")
             if not _dir.isEmpty():
-                self.main_panel.add_files([_dir])
+                self.files_changed_event(True, [_dir])
+                # self.main_panel.add_files([_dir])
         elif event_name == "Settings":
             TransCodaSettings().exec()
         elif event_name == "Clear":
             self.main_panel.clear_table()
+            TransCodaSettings.save_encode_list(self.main_panel.get_items())
         elif event_name == "Start":
             if self.executor is not None and self.executor.is_running():
                 self.executor.stop_scan()
@@ -146,12 +149,15 @@ class TransCodaApp(QMainWindow):
     def menu_event(self, event_name, item_index):
         if event_name == "Remove":
             self.main_panel.remove_files([item_index])
+            TransCodaSettings.save_encode_list(self.main_panel.get_items())
         elif event_name == "Encode":
             self.validate_and_start_encoding(run_index=item_index)
         elif event_name == EncodaStatus.SUCCESS.name:
             self.main_panel.update_item_status(item_index, EncodaStatus.SUCCESS)
+            TransCodaSettings.save_encode_list(self.main_panel.get_items())
         elif event_name == EncodaStatus.READY.name:
             self.main_panel.update_item_status(item_index, EncodaStatus.READY)
+            TransCodaSettings.save_encode_list(self.main_panel.get_items())
         # elif event_name == "Open":
         #     file = self.file_model.get_item(row, FileModelKeys.input_file_name)
         #     subprocess.run(["open", f"\"{file}\""], check=False, shell=True)
@@ -192,18 +198,22 @@ class TransCodaApp(QMainWindow):
         self.progressbar.setValue(0)
         self.progressbar.setMaximum(len(runnables))
         self.main_panel.encoding_started(run_index)
-        self.executor = CommandExecutionFactory(runnables, logger=TransCoda.logger)
+        self.executor = CommonUtils.CommandExecutionFactory(runnables, logger=TransCoda.logger)
         self.executor.finish_event.connect(self.jobs_complete_event)
         self.statusBar().showMessage(f"Dispatching {self.progressbar.maximum()} jobs for encoding")
         self.executor.start()
 
     def result_received_event(self, result):
         self.main_panel.update_items(result)
+        items = self.main_panel.get_items()
+        TransCodaSettings.save_encode_list(items)
         self.progressbar.setValue(self.progressbar.value() + len(result))
         self.update_status_bar()
 
     def status_received_event(self, status):
         self.main_panel.update_items([status])
+        items = self.main_panel.get_items()
+        TransCodaSettings.save_encode_list(items)
         self.update_status_bar()
 
     def jobs_complete_event(self, all_results, time_taken):
@@ -220,13 +230,15 @@ class TransCodaApp(QMainWindow):
                 qurls.append(QUrl(f"file://{file}"))
             # Add files first
             total_added = self.main_panel.add_qurls(qurls)
+            items = self.main_panel.get_items()
+            TransCodaSettings.save_encode_list(items)
             # Fetch and enrich with metadata
             retriever = MetadataRetriever(scanner.files)
             retriever.signals.result.connect(self.result_received_event)
             # UX
             self.progressbar.setValue(0)
             self.progressbar.setMaximum(total_added)
-            self.executor = CommandExecutionFactory([retriever], logger=TransCoda.logger)
+            self.executor = CommonUtils.CommandExecutionFactory([retriever], logger=TransCoda.logger)
             self.executor.finish_event.connect(self.jobs_complete_event)
             self.executor.start()
 
