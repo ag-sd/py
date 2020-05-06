@@ -134,6 +134,12 @@ class MainPanel(QTableView):
                 elif orientation == Qt.Vertical:
                     return p_int
 
+        def sort(self, col, order=Qt.AscendingOrder):
+            self.file_items.sort(
+                key=lambda x: x[self.columnHeaders[col]],
+                reverse=False if order == Qt.AscendingOrder else True)
+            self.dataChanged.emit(QModelIndex(), QModelIndex())
+
         def add_rows(self, urls):
             items_to_add = self.create_entries(urls)
             return self.set_items(items_to_add)
@@ -298,6 +304,8 @@ class MainPanel(QTableView):
         self.horizontalHeader().setSectionsMovable(True)
         self.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
         self.horizontalHeader().customContextMenuRequested.connect(self.get_header_context_menu)
+        self.horizontalHeader().setSectionsClickable(True)
+        self.setSortingEnabled(True)
         self.file_model = None
         self.clear_table()
         TransCodaSettings.settings_container.settings_change_event.connect(self.settings_changed)

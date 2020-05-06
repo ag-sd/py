@@ -23,7 +23,7 @@ Trans:Coda lets you convert media from one format to another
 - [ ] Configure output directory by tags
 - [ ] Select multiple files
 - [x] Extended columns available
-- [ ] Column Sort
+- [x] Column Sort
 - [ ] Configure Encoders from File
 <del>
 - [ ] Extended format support<br>
