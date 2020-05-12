@@ -5,6 +5,7 @@ from enum import Enum
 from shutil import which
 
 _MISSING_DATA = "Not Available"
+# http://www.imagemagick.org/script/identify.php
 # ffprobe -hide_banner -v info -show_streams -show_format file_example_MP4_480_1_5MG.mp4 -of json -of json
 _COMMAND_ARGS = "ffprobe -v error -select_streams a:0 -show_entries " \
                 "'stream=codec_name,codec_long_name,codec_type,channels,channel_layout," \

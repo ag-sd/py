@@ -8,7 +8,7 @@ from enum import Enum
 from shutil import which
 
 from PyQt5.QtCore import pyqtSignal, QObject
-from PyQt5.QtGui import QColor, QBrush
+from PyQt5.QtGui import QColor, QBrush, QPalette
 
 import CommonUtils
 import TransCoda
@@ -45,14 +45,17 @@ class Encoders(Enum):
 
 
 class EncodaStatus(Enum):
-    READY = 176, 224, 230, 0
-    WAITING = 255, 140, 0, 50
-    SUCCESS = 152, 251, 152, 75
-    ERROR = 220, 20, 60, 75
-    IN_PROGRESS = 244, 164, 96, 75
+    READY = 176, 224, 230, 0, True
+    WAITING = 255, 140, 0, 50, True
+    SUCCESS = 152, 251, 152, 75, True
+    ERROR = 220, 20, 60, 75, True
+    IN_PROGRESS = 244, 164, 96, 75, True
+    READING_METADATA = 192, 192, 192, 255, False
 
-    def __init__(self, r, g, b, a):
+    def __init__(self, r, g, b, a, is_background):
         self.brush = QBrush(QColor(r, g, b, a))
+        self.is_background = is_background
+        self.is_foreground = not is_background
 
     def __str__(self):
         return self.name
@@ -60,13 +63,17 @@ class EncodaStatus(Enum):
 
 class EncodaCommand(CommonUtils.Command):
 
-    def __init__(self, input_file, output_file, command, overwrite_if_exists=True, preserve_timestamps=False):
+    def __init__(self, input_file, output_file, command,
+                 overwrite_if_exists=True,
+                 preserve_timestamps=False,
+                 delete_metadata=False):
         super().__init__()
         self.input_file = input_file
         self.output_file = output_file
         self.command = command
         self.overwrite_if_exists = overwrite_if_exists
         self.preserve_timestamps = preserve_timestamps
+        self.delete_metadata = delete_metadata
 
     def do_work(self):
         start_time = datetime.datetime.now()
@@ -89,6 +96,7 @@ class EncodaCommand(CommonUtils.Command):
         # Generate the command
         cmd = f"ffmpeg" \
               f" -hide_banner -loglevel repeat+verbose -y" \
+              f" {'-map_metadata -1' if self.delete_metadata else ''}" \
               f" -i \"{self.input_file}\" {self.command} \"{self.output_file}\""
 
         # Start encoding
@@ -105,14 +113,10 @@ class EncodaCommand(CommonUtils.Command):
                 [self.create_result(cmd, EncodaStatus.SUCCESS,
                                     f"Time taken {CommonUtils.human_readable_time(cpu_time)}",
                                     cpu_time, ratio, output_stat.st_size)])
-        except CommonUtils.ProcessRunnerException as e:
-            cpu_time = (datetime.datetime.now() - start_time).total_seconds()
-            TransCoda.logger.error(e)
-            self.signals.result.emit([self.create_result(cmd, EncodaStatus.ERROR, e.message, cpu_time, 0, 0)])
         except Exception as g:
             cpu_time = (datetime.datetime.now() - start_time).total_seconds()
             TransCoda.logger.error(g)
-            self.signals.result.emit([self.create_result(cmd, EncodaStatus.ERROR, g.__cause__, cpu_time, 0, 0)])
+            self.signals.result.emit([self.create_result(cmd, EncodaStatus.ERROR, str(g), cpu_time, 0, 0)])
 
     def status_event(self, _file, total, completed):
         from TransCoda.MainPanel import ItemKeys
@@ -126,7 +130,7 @@ class EncodaCommand(CommonUtils.Command):
 
     def create_result(self, cmd, status, messages, cpu_time, compression_ratio, op_file_size):
         from TransCoda.MainPanel import ItemKeys
-        return {
+        response = {
             ItemKeys.input_file_name: self.input_file,
             ItemKeys.output_file_name: self.output_file,
             ItemKeys.encoder_command: cmd,
@@ -136,6 +140,11 @@ class EncodaCommand(CommonUtils.Command):
             ItemKeys.compression_ratio: compression_ratio,
             ItemKeys.output_file_size: op_file_size
         }
+        if status == EncodaStatus.SUCCESS:
+            response.update({
+                ItemKeys.percent_compete: "100%"
+            })
+        return response
 
 
 class FFMPEGNotFoundException(Exception):

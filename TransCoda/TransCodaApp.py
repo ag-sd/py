@@ -6,15 +6,16 @@ from PyQt5 import QtCore
 from PyQt5.QtCore import (pyqtSignal, QSize, QUrl)
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QMainWindow, QToolBar, \
-    QFileDialog, QProgressBar, QMessageBox
+    QFileDialog, QProgressBar, QMessageBox, QLabel, QFrame
 
 import CommonUtils
 import TransCoda
+from CustomUI import QVLine
 from TransCoda import MediaMetaData
 from TransCoda.Encoda import EncodaCommand, EncodaStatus
 from TransCoda.MainPanel import MainPanel, OutputDirectoryNotSet, EncoderNotSelected, ItemKeys
 from TransCoda.MediaMetaData import MetaDataFields
-from TransCoda.TransCodaSettings import TransCodaSettings
+from TransCoda.TransCodaSettings import TransCodaSettings, SettingsKeys
 
 
 class MetadataRetriever(CommonUtils.Command):
@@ -37,6 +38,7 @@ class MetadataRetriever(CommonUtils.Command):
                 ItemKeys.input_file_size: metadata[MetaDataFields.size],
                 ItemKeys.sample_rate: metadata[MetaDataFields.sample_rate],
                 ItemKeys.channels: metadata[MetaDataFields.channels],
+                ItemKeys.status: EncodaStatus.READY
             }
             self.add_element(item, ItemKeys.artist, metadata, MetaDataFields.artist)
             self.add_element(item, ItemKeys.album_artist, metadata, MetaDataFields.album_artist)
@@ -62,8 +64,13 @@ class MainToolBar(QToolBar):
 
     def __init__(self):
         super().__init__()
-        self.create_actions()
         self.setIconSize(QSize(48, 48))
+        self.encode_ = CommonUtils.create_action(name="Start", shortcut="Ctrl+R",
+                                                 tooltip="Start encoding the files",
+                                                 func=self.raise_event, parent=self,
+                                                 icon=QIcon.fromTheme("media-playback-start"))
+        self.encode_.triggered.connect(self.encode_click)
+        self.create_actions()
 
     def create_actions(self):
         self.addAction(CommonUtils.create_action(name="Add File", shortcut="Ctrl+O",
@@ -74,7 +81,7 @@ class MainToolBar(QToolBar):
                                                  tooltip="Add an entire directory list",
                                                  func=self.raise_event, parent=self,
                                                  icon=QIcon.fromTheme("folder-new")))
-        self.addAction(CommonUtils.create_action(name="Clear", shortcut="Delete",
+        self.addAction(CommonUtils.create_action(name="Clear", shortcut="Shift+Delete",
                                                  tooltip="Clear all files",
                                                  func=self.raise_event, parent=self,
                                                  icon=QIcon.fromTheme("edit-clear")))
@@ -83,10 +90,7 @@ class MainToolBar(QToolBar):
                                                  tooltip="Open the settings editor",
                                                  func=self.raise_event, parent=self,
                                                  icon=QIcon.fromTheme("preferences-system")))
-        self.addAction(CommonUtils.create_action(name="Start", shortcut="Ctrl+R",
-                                                 tooltip="Start encoding the files",
-                                                 func=self.raise_event, parent=self,
-                                                 icon=QIcon.fromTheme("media-playback-start")))
+        self.addAction(self.encode_)
         self.addSeparator()
         self.addAction(CommonUtils.create_action(name="Help", shortcut="F1",
                                                  tooltip="View online help",
@@ -96,6 +100,16 @@ class MainToolBar(QToolBar):
                                                  tooltip="About this application",
                                                  func=self.raise_event, parent=self,
                                                  icon=QIcon.fromTheme("help-about")))
+
+    def encode_click(self, event):
+        if self.encode_.text() == "Start":
+            self.encode_.setIcon(QIcon.fromTheme("media-playback-stop"))
+            self.encode_.setText("Stop")
+            self.encode_.setToolTip("Wait for all files in progress to complete and Stop")
+        else:
+            self.encode_.setIcon(QIcon.fromTheme("media-playback-start"))
+            self.encode_.setText("Start")
+            self.encode_.setToolTip("Start encoding the files")
 
     def raise_event(self, event):
         self.button_pressed.emit(event)
@@ -107,6 +121,8 @@ class TransCodaApp(QMainWindow):
         self.main_panel = MainPanel()
         self.tool_bar = MainToolBar()
         self.progressbar = QProgressBar()
+        self.message = QLabel("Ready")
+        self.encoder = QLabel("Encoder")
         self.executor = None
         self.init_ui()
 
@@ -117,22 +133,32 @@ class TransCodaApp(QMainWindow):
         self.tool_bar.button_pressed.connect(self.toolbar_event)
         self.addToolBar(QtCore.Qt.LeftToolBarArea, self.tool_bar)
         self.setCentralWidget(self.main_panel)
-        self.statusBar().addPermanentWidget(self.progressbar)
+        self.statusBar().addPermanentWidget(QVLine())
+        encoder_name = TransCodaSettings.get_encoder_name()
+        if encoder_name:
+            self.encoder.setText(TransCodaSettings.get_encoder_name())
+        else:
+            self.encoder.setText("No encoder selected.")
+        self.statusBar().addPermanentWidget(self.encoder, 0)
+        self.statusBar().addPermanentWidget(QVLine())
+        self.statusBar().addPermanentWidget(self.progressbar, 0)
         self.setMinimumSize(800, 600)
         self.setWindowTitle(TransCoda.__APP_NAME__)
         self.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), "resource/soundconverter.svg")))
+        TransCodaSettings.settings_container.settings_change_event.connect(self.settings_changed)
         self.show()
+        # Executed after the show, where all dimensions are calculated
+        self.progressbar.setFixedWidth(self.progressbar.width())
 
     def toolbar_event(self, event_name):
         if event_name == "Add File":
             file, _ = QFileDialog.getOpenFileUrl(caption="Select a File")
             if not file.isEmpty():
-                self.main_panel.add_files([file])
+                self.files_changed_event(True, [file])
         elif event_name == "Add Directory":
             _dir = QFileDialog.getExistingDirectoryUrl(caption="Select a directory")
             if not _dir.isEmpty():
                 self.files_changed_event(True, [_dir])
-                # self.main_panel.add_files([_dir])
         elif event_name == "Settings":
             TransCodaSettings().exec()
         elif event_name == "Clear":
@@ -143,38 +169,42 @@ class TransCodaApp(QMainWindow):
                 self.executor.stop_scan()
                 self.statusBar().showMessage("Stop command issued. Waiting for threads to finish")
                 return
-            else:
-                self.validate_and_start_encoding()
+            self.validate_and_start_encoding()
 
-    def menu_event(self, event_name, item_index):
+    def menu_event(self, event_name, item_indices):
         if event_name == "Remove":
-            self.main_panel.remove_files([item_index])
+            self.main_panel.remove_files(item_indices)
             TransCodaSettings.save_encode_list(self.main_panel.get_items())
         elif event_name == "Encode":
-            self.validate_and_start_encoding(run_index=item_index)
+            self.validate_and_start_encoding(run_indices=item_indices)
         elif event_name == EncodaStatus.SUCCESS.name:
-            self.main_panel.update_item_status(item_index, EncodaStatus.SUCCESS)
+            self.main_panel.update_item_status(item_indices, EncodaStatus.SUCCESS)
             TransCodaSettings.save_encode_list(self.main_panel.get_items())
         elif event_name == EncodaStatus.READY.name:
-            self.main_panel.update_item_status(item_index, EncodaStatus.READY)
+            self.main_panel.update_item_status(item_indices, EncodaStatus.READY)
+            TransCodaSettings.save_encode_list(self.main_panel.get_items())
+        elif event_name == "Clear All":
+            self.main_panel.clear_table()
             TransCodaSettings.save_encode_list(self.main_panel.get_items())
         # elif event_name == "Open":
         #     file = self.file_model.get_item(row, FileModelKeys.input_file_name)
         #     subprocess.run(["open", f"\"{file}\""], check=False, shell=True)
 
-    def validate_and_start_encoding(self, run_index=None):
+    def validate_and_start_encoding(self, run_indices=None):
         runnables = []
         overwrite_if_exists = TransCodaSettings.get_overwrite_if_exists()
         preserve_timestamps = TransCodaSettings.get_preserve_timestamps()
+        delete_metadata = TransCodaSettings.get_delete_metadata()
         try:
             for index, (_input, _output, _command) in enumerate(self.main_panel.generate_commands()):
-                if run_index and index != run_index:
+                if run_indices and not run_indices.__contains__(index):
                     continue
                 runnable = EncodaCommand(input_file=_input,
                                          output_file=_output,
                                          command=_command,
                                          overwrite_if_exists=overwrite_if_exists,
-                                         preserve_timestamps=preserve_timestamps)
+                                         preserve_timestamps=preserve_timestamps,
+                                         delete_metadata=delete_metadata)
                 runnable.signals.result.connect(self.result_received_event)
                 runnable.signals.status.connect(self.status_received_event)
                 runnables.append(runnable)
@@ -197,8 +227,10 @@ class TransCodaApp(QMainWindow):
 
         self.progressbar.setValue(0)
         self.progressbar.setMaximum(len(runnables))
-        self.main_panel.encoding_started(run_index)
-        self.executor = CommonUtils.CommandExecutionFactory(runnables, logger=TransCoda.logger)
+        self.main_panel.encoding_started(run_indices)
+        self.executor = CommonUtils.CommandExecutionFactory(runnables,
+                                                            logger=TransCoda.logger,
+                                                            max_threads=TransCodaSettings.get_max_threads())
         self.executor.finish_event.connect(self.jobs_complete_event)
         self.statusBar().showMessage(f"Dispatching {self.progressbar.maximum()} jobs for encoding")
         self.executor.start()
@@ -238,9 +270,16 @@ class TransCodaApp(QMainWindow):
             # UX
             self.progressbar.setValue(0)
             self.progressbar.setMaximum(total_added)
-            self.executor = CommonUtils.CommandExecutionFactory([retriever], logger=TransCoda.logger)
+            self.executor = CommonUtils.CommandExecutionFactory([retriever],
+                                                                logger=TransCoda.logger,
+                                                                max_threads=TransCodaSettings.get_max_threads())
             self.executor.finish_event.connect(self.jobs_complete_event)
             self.executor.start()
+
+    def settings_changed(self, setting, value):
+        valid_keys = {SettingsKeys.encoder}
+        if setting in valid_keys:
+            self.encoder.setText(TransCodaSettings.get_encoder_name())
 
     def update_status_bar(self):
         cpu = psutil.cpu_percent()
@@ -258,7 +297,6 @@ class TransCodaApp(QMainWindow):
         title += " " + cpu if cpu else ""
         title += " " + progress if progress else ""
         self.setWindowTitle(title)
-
 
 def main():
     app = QApplication(sys.argv)

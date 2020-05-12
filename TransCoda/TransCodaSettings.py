@@ -3,10 +3,10 @@ from enum import Enum, unique
 from functools import partial
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QCheckBox, QComboBox, QDialogButtonBox, QLabel, QVBoxLayout
+from PyQt5.QtWidgets import QDialog, QCheckBox, QComboBox, QDialogButtonBox, QLabel, QVBoxLayout, QSpinBox, QHBoxLayout
 
 import TransCoda
-from CommonUtils import AppSettings
+from CommonUtils import AppSettings, CommandExecutionFactory
 from CustomUI import FileChooserTextBox, QHLine
 from TransCoda.Encoda import Encoders
 
@@ -19,6 +19,8 @@ class SettingsKeys(Enum):
     overwrite_files = "overwrite_existing"
     preserve_times = "preserve_times"
     encode_list = "encode_list"
+    max_theads = "max_threads"
+    delete_metadata = "delete_medatata"
 
 
 settings = AppSettings(
@@ -35,7 +37,9 @@ class TransCodaSettings(QDialog):
         self.preserve_dir = QCheckBox("Preserve Directory Structure")
         self.overwrite_files = QCheckBox("Overwrite files if they exist")
         self.preserve_times = QCheckBox("Preserve original file times in result")
+        self.delete_metadata = QCheckBox("Delete all tag information in result")
         self.encoder = QComboBox()
+        self.max_threads = QSpinBox()
         for e in Encoders:
             self.encoder.addItem(str(e), e)
         self.init_ui()
@@ -51,6 +55,9 @@ class TransCodaSettings(QDialog):
         self.preserve_times.setChecked(settings.get_setting(SettingsKeys.preserve_times) == Qt.Checked)
         self.preserve_times.stateChanged.connect(partial(self.set_setting, SettingsKeys.preserve_times))
 
+        self.delete_metadata.setChecked(settings.get_setting(SettingsKeys.delete_metadata) == Qt.Checked)
+        self.delete_metadata.stateChanged.connect(partial(self.set_setting, SettingsKeys.delete_metadata))
+
         self.overwrite_files.setChecked(settings.get_setting(SettingsKeys.overwrite_files) == Qt.Checked)
         self.overwrite_files.stateChanged.connect(partial(self.set_setting, SettingsKeys.overwrite_files))
 
@@ -60,16 +67,29 @@ class TransCodaSettings(QDialog):
             self.encoder.setCurrentIndex(match)
         self.encoder.currentTextChanged.connect(partial(self.set_setting, SettingsKeys.encoder))
 
+        self.max_threads.setMinimum(1)
+        self.max_threads.setMaximum(CommandExecutionFactory([]).get_max_threads())
+        self.max_threads.setValue(settings.get_setting(SettingsKeys.max_theads, self.max_threads.maximum()))
+        self.max_threads.valueChanged.connect(partial(self.set_setting, SettingsKeys.max_theads))
+
     def init_ui(self):
         layout = QVBoxLayout()
         layout.addWidget(self.output_dir)
         layout.addWidget(self.preserve_dir)
         layout.addWidget(self.preserve_times)
+        layout.addWidget(self.delete_metadata)
         layout.addWidget(self.overwrite_files)
 
         layout.addWidget(QHLine())
         layout.addWidget(QLabel("Encoder"))
         layout.addWidget(self.encoder)
+
+        layout.addWidget(QHLine())
+        layout.addWidget(QLabel("Advanced"))
+        h_layout = QHBoxLayout()
+        h_layout.addWidget(QLabel("Number of files to encode at the same time"))
+        h_layout.addWidget(self.max_threads)
+        layout.addLayout(h_layout)
 
         layout.addWidget(QHLine())
         buttons = QDialogButtonBox(QDialogButtonBox.Ok, Qt.Horizontal, self)
@@ -91,6 +111,10 @@ class TransCodaSettings(QDialog):
     @staticmethod
     def get_output_dir():
         return settings.get_setting(SettingsKeys.output_dir, None)
+
+    @staticmethod
+    def get_max_threads():
+        return settings.get_setting(SettingsKeys.max_theads, CommandExecutionFactory([]).get_max_threads())
 
     @staticmethod
     def get_encoder():
@@ -116,6 +140,10 @@ class TransCodaSettings(QDialog):
         return TransCodaSettings.settings_container.get_setting(SettingsKeys.preserve_times, Qt.Checked) == Qt.Checked
 
     @staticmethod
+    def get_delete_metadata():
+        return TransCodaSettings.settings_container.get_setting(SettingsKeys.delete_metadata, Qt.Unchecked) == Qt.Checked
+
+    @staticmethod
     def save_encode_list(items):
         items_pickle = pickle.dumps(items)
         TransCodaSettings.settings_container.apply_setting(SettingsKeys.encode_list, items_pickle)
@@ -126,7 +154,3 @@ class TransCodaSettings(QDialog):
         if items_pickle:
             return pickle.loads(items_pickle)
         return []
-
-
-
-

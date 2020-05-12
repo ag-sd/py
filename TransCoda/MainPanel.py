@@ -3,9 +3,11 @@ from collections import Mapping
 from enum import Enum
 from os import path
 
-from PyQt5.QtCore import (Qt, pyqtSignal, QAbstractTableModel, QVariant, QFileInfo, QModelIndex, QMimeDatabase, QUrl)
-from PyQt5.QtGui import QIcon, QCursor
-from PyQt5.QtWidgets import QTableView, QAbstractItemView, QFileIconProvider, QMenu
+from PyQt5.QtCore import (Qt, pyqtSignal, QAbstractTableModel, QVariant, QFileInfo, QModelIndex, QMimeDatabase,
+                          QMargins)
+from PyQt5.QtGui import QIcon, QCursor, QPalette
+from PyQt5.QtWidgets import QTableView, QAbstractItemView, QFileIconProvider, QMenu, QStyledItemDelegate, \
+    QStyleOptionProgressBar, QApplication, QStyle
 
 import CommonUtils
 from TransCoda.Encoda import EncodaStatus
@@ -29,17 +31,17 @@ class ItemKeys(Enum):
     input_duration = "Duration", True
     input_bitrate = "Bitrate", True
     input_encoder = "Encoding", True
-    output_file_dir = "Output Directory", True
+    output_file_dir = "Output Dir.", True
     output_file_name = "output_file_name", False
-    output_file_size = "Encoded File Size", True
+    output_file_size = "Encoded Size", True
     icon = "Icon", False
     status = "Status", True
     encoder = "Encoder", True
     messages = "Messages", True
     encoder_command = "Encoder Command", False
-    percent_compete = "Percent Complete", True
+    percent_compete = "Progress", True
     cpu_time = "CPU Time", True
-    compression_ratio = "Compression Ratio", True,
+    compression_ratio = "Ratio", True,
     sample_rate = "Sample Rate", True
     channels = "Channels", True
     album_artist = "Album Artist", True
@@ -78,6 +80,30 @@ class MainPanel(QTableView):
             for k, v in kwargs.items():
                 self[k] = v
 
+    class ProgressBarDelegate(QStyledItemDelegate):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+
+        def paint(self, painter, option, index):
+            column_key = self.parent().get_column_key(index.column())
+            if column_key == ItemKeys.percent_compete:
+                column_value = self.parent().get_items(index=index.row(), item_type=column_key)
+                if not column_value:
+                    # If no progress value, just let the system draw the value
+                    super().paint(painter, option, index)
+                    return
+                progressbar_options = QStyleOptionProgressBar()
+                progressbar_options.rect = option.rect.marginsRemoved(QMargins(1, 1, 1, 1))
+                progressbar_options.minimum = 0
+                progressbar_options.maximum = 100
+                progressbar_options.textAlignment = Qt.AlignCenter
+                progressbar_options.progress = float(column_value.replace("%", ""))
+                progressbar_options.text = column_value
+                progressbar_options.textVisible = True
+                QApplication.style().drawControl(QStyle.CE_ProgressBar, progressbar_options, painter)
+            else:
+                super().paint(painter, option, index)
+
     class FileItemModel(QAbstractTableModel):
         _value_not_set = "VALUE NOT SET"
         _encoder_not_set = "Encoder not selected"
@@ -88,17 +114,18 @@ class MainPanel(QTableView):
             self.executor = None
             self.file_items = []
             self.columnHeaders = [ItemKeys.input_file_name,
-                                  ItemKeys.input_file_type,
                                   ItemKeys.input_file_size,
                                   ItemKeys.input_bitrate,
                                   ItemKeys.input_duration,
+                                  ItemKeys.percent_compete,
                                   ItemKeys.input_encoder,
                                   ItemKeys.output_file_dir,
-                                  ItemKeys.encoder,
                                   ItemKeys.output_file_size,
                                   ItemKeys.compression_ratio,
                                   ItemKeys.cpu_time,
-                                  ItemKeys.percent_compete]
+                                  ItemKeys.input_file_type]
+            palette = QPalette()
+            self._default_foreground = palette.brush(QPalette.Active, QPalette.WindowText)
 
         def rowCount(self, parent):
             return len(self.file_items)
@@ -124,8 +151,14 @@ class MainPanel(QTableView):
 
             elif role == Qt.BackgroundRole:
                 item = self.file_items[index.row()]
-                if ItemKeys.status in item:
+                if ItemKeys.status in item and item[ItemKeys.status].is_background:
                     return item[ItemKeys.status].brush
+            elif role == Qt.ForegroundRole:
+                item = self.file_items[index.row()]
+                if ItemKeys.status in item and item[ItemKeys.status].is_foreground:
+                    return item[ItemKeys.status].brush
+                else:
+                    return self._default_foreground
 
         def headerData(self, p_int, orientation, role=None):
             if role == Qt.DisplayRole:
@@ -145,14 +178,15 @@ class MainPanel(QTableView):
             return self.set_items(items_to_add)
 
         def remove_rows(self, indices):
-            for index in indices:
+            # sort indices and remove the largest first
+            for index in sorted(indices, reverse=True):
                 self.beginRemoveRows(QModelIndex(), index, index)
                 del(self.file_items[index])
                 self.endRemoveRows()
 
         def get_items(self, index=None, item_type=None):
             if index is not None:
-                return self.file_items[index][item_type]
+                return self.file_items[index][item_type] if item_type in self.file_items[index] else None
             else:
                 items_copy = []
                 for item in self.file_items:
@@ -191,6 +225,7 @@ class MainPanel(QTableView):
                 self.dataChanged.emit(model_index_from, model_index_to, [Qt.DisplayRole, Qt.BackgroundRole])
 
         def update_items(self, item_data):
+            updated_rows = set()
             for item in item_data:
                 index = self.find_item(item[ItemKeys.input_file_name])
                 if index is not None:
@@ -199,12 +234,19 @@ class MainPanel(QTableView):
                     model_index_from = self.createIndex(index, 0)
                     model_index_to = self.createIndex(index, len(self.columnHeaders))
                     self.dataChanged.emit(model_index_from, model_index_to, [Qt.DisplayRole, Qt.BackgroundRole])
+                    updated_rows.add(index)
+            max_row = sorted(updated_rows)[-1]
+            return self.createIndex(max_row, 0)
 
-        def update_item_status(self, item_index, new_status):
-            model_index_from = self.createIndex(item_index, 0)
-            model_index_to = self.createIndex(item_index, len(self.columnHeaders))
-            self.file_items[item_index][ItemKeys.status] = new_status
-            self.dataChanged.emit(model_index_from, model_index_to, [Qt.BackgroundRole])
+        def update_item_status(self, item_indices, new_status):
+            for index in item_indices:
+                model_index_from = self.createIndex(index, 0)
+                model_index_to = self.createIndex(index, len(self.columnHeaders))
+                self.file_items[index][ItemKeys.status] = new_status
+                self.dataChanged.emit(model_index_from, model_index_to, [Qt.BackgroundRole])
+
+        def get_column_key(self, index):
+            return self.columnHeaders[index]
 
         def get_columns(self):
             return self.columnHeaders
@@ -213,6 +255,7 @@ class MainPanel(QTableView):
             self.beginInsertColumns(QModelIndex(), len(self.columnHeaders), len(self.columnHeaders))
             self.columnHeaders.append(column)
             self.endInsertColumns()
+            return len(self.columnHeaders) - 1
 
         def remove_column(self, column):
             del_index = -1
@@ -233,7 +276,8 @@ class MainPanel(QTableView):
                 elif ItemKeys.encoder not in file_item \
                         or file_item[ItemKeys.encoder] == self._value_not_set:
                     raise EncoderNotSelected
-                elif file_item[ItemKeys.status] == EncodaStatus.READY:
+                elif file_item[ItemKeys.status] == EncodaStatus.READY or \
+                        file_item[ItemKeys.status] == EncodaStatus.WAITING:
                     _input = file_item[ItemKeys.input_file_name]
                     _encoder = TransCodaSettings.get_encoder()
                     _, file = path.split(file_item[ItemKeys.input_file_name])
@@ -255,7 +299,7 @@ class MainPanel(QTableView):
                     item[ItemKeys.input_file_name] = local_file
                     item[ItemKeys.input_file_type] = self.mime_database.mimeTypeForFile(local_file).name()
                     # item[ItemKeys.icon] = QFileIconProvider().icon(info)
-                    item[ItemKeys.status] = EncodaStatus.READY
+                    item[ItemKeys.status] = EncodaStatus.READING_METADATA
 
                     self.set_output_details(item)
                     items_to_add.append(item)
@@ -290,7 +334,7 @@ class MainPanel(QTableView):
             return None
 
     files_changed_event = pyqtSignal(bool, 'PyQt_PyObject')
-    menu_item_event = pyqtSignal(str, int)
+    menu_item_event = pyqtSignal(str, set)
 
     def __init__(self):
         super().__init__()
@@ -299,6 +343,8 @@ class MainPanel(QTableView):
         self.setAlternatingRowColors(True)
         self.setShowGrid(False)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.verticalHeader().setDefaultSectionSize(self.verticalHeader().fontMetrics().height() + 3)
         self.verticalHeader().hide()
         self.horizontalHeader().setHighlightSections(False)
         self.horizontalHeader().setSectionsMovable(True)
@@ -310,6 +356,9 @@ class MainPanel(QTableView):
         self.clear_table()
         TransCodaSettings.settings_container.settings_change_event.connect(self.settings_changed)
         self.menu = self.create_context_menu()
+        # self.attribute_table_view.setItemDelegateForColumn(column_icon, delegate)
+        self.progressbarDelegate = MainPanel.ProgressBarDelegate(parent=self)
+        self.setItemDelegate(self.progressbarDelegate)
 
     def create_context_menu(self):
         menu = QMenu()
@@ -317,6 +366,8 @@ class MainPanel(QTableView):
                                                  icon=QIcon.fromTheme("document-open")))
         menu.addAction(CommonUtils.create_action(self, "Remove", self.menu_item_selected,
                                                  icon=QIcon.fromTheme("list-remove")))
+        menu.addAction(CommonUtils.create_action(self, "Clear All", self.menu_item_selected,
+                                                 icon=QIcon.fromTheme("edit-delete")))
         menu.addSeparator()
         menu.addAction(CommonUtils.create_action(self, "Encode", self.menu_item_selected,
                                                  icon=QIcon.fromTheme("media-playback-start")))
@@ -379,13 +430,15 @@ class MainPanel(QTableView):
 
     def set_items(self, items):
         self.file_model.set_items(items)
-
-    def update_items(self, file_data):
-        self.file_model.update_items(file_data)
         self.adjust_columns()
 
-    def update_item_status(self, item_index, new_status):
-        self.file_model.update_item_status(item_index, new_status)
+    def update_items(self, file_data):
+        index = self.file_model.update_items(file_data)
+        self.adjust_columns()
+        # self.scrollTo(index)
+
+    def update_item_status(self, item_indices, new_status):
+        self.file_model.update_item_status(item_indices, new_status)
 
     def settings_changed(self, setting, value):
         valid_keys = {SettingsKeys.output_dir,
@@ -396,9 +449,11 @@ class MainPanel(QTableView):
             TransCodaSettings.save_encode_list(self.file_model.get_items())
 
     def menu_item_selected(self, item_name):
-        selected = self.selectedIndexes()
-        if selected and selected[0].row() >= 0:
-            self.menu_item_event.emit(item_name, selected[0].row())
+        rows = set()
+        for selected in self.selectedIndexes():
+            rows.add(selected.row())
+        if len(rows) > 0:
+            self.menu_item_event.emit(item_name, rows)
 
     def get_header_context_menu(self, event):
         # Get Available Headers
@@ -414,7 +469,7 @@ class MainPanel(QTableView):
         menu.exec(QCursor.pos())
 
     def column_header_selection(self, item_name):
-        for column in self.file_model.get_columns():
+        for index, column in enumerate(self.file_model.get_columns()):
             if column.display_name == item_name:
                 # Remove
                 self.file_model.remove_column(column)
@@ -424,5 +479,8 @@ class MainPanel(QTableView):
             if column.display_name == item_name:
                 self.file_model.add_column(column)
                 return
+
+    def get_column_key(self, index):
+        return self.file_model.get_column_key(index)
 
 
