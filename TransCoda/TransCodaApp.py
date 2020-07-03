@@ -1,12 +1,14 @@
 import os
 import sys
+from builtins import staticmethod
 
 import psutil
 from PyQt5 import QtCore
 from PyQt5.QtCore import (pyqtSignal, QSize, QUrl)
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QIcon, QTextCursor, QFontDatabase
 from PyQt5.QtWidgets import QApplication, QMainWindow, QToolBar, \
-    QFileDialog, QProgressBar, QMessageBox, QLabel, QFrame
+    QFileDialog, QProgressBar, QMessageBox, QLabel, QFrame, QPushButton, QDialog, QTextEdit, QHBoxLayout, QComboBox, \
+    QVBoxLayout
 
 import CommonUtils
 import TransCoda
@@ -15,6 +17,7 @@ from TransCoda import MediaMetaData
 from TransCoda.Encoda import EncodaCommand, EncodaStatus
 from TransCoda.MainPanel import MainPanel, OutputDirectoryNotSet, EncoderNotSelected, ItemKeys
 from TransCoda.MediaMetaData import MetaDataFields
+from TransCoda.ProcessRunners import HandbrakeProcessRunner
 from TransCoda.TransCodaSettings import TransCodaSettings, SettingsKeys
 
 
@@ -115,6 +118,49 @@ class MainToolBar(QToolBar):
         self.button_pressed.emit(event)
 
 
+class TerminalView(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.file_selector = QComboBox()
+        self.text_box = QTextEdit()
+        self.logs = {}
+        self.init_ui()
+
+    def init_ui(self):
+        self.text_box.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
+        self.text_box.setStyleSheet("QTextEdit{background: back; color: grey; font-size: 11.5px;}")
+        self.file_selector.currentTextChanged.connect(self.file_selector_changed)
+        layout = QVBoxLayout()
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.addWidget(self.file_selector)
+        layout.addWidget(self.text_box)
+        self.setLayout(layout)
+        self.setModal(False)
+        self.setMinimumSize(800, 450)
+
+    def log_message(self, message):
+        _file = message['file']
+        _message = self.create_message(message['time'], message['message'])
+        if _file in self.logs:
+            self.logs[_file].append(_message)
+        else:
+            self.logs[_file] = [_message]
+            self.file_selector.addItem(_file)
+
+        if self.file_selector.currentText() == _file:
+            self.text_box.moveCursor(QTextCursor.End)
+            self.text_box.insertPlainText(_message)
+            self.text_box.moveCursor(QTextCursor.End)
+
+    def file_selector_changed(self):
+        self.text_box.clear()
+        self.text_box.insertPlainText("".join(self.logs[self.file_selector.currentText()]))
+
+    @staticmethod
+    def create_message(time, message):
+        return f"{time}:{message}"
+
+
 class TransCodaApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -123,8 +169,11 @@ class TransCodaApp(QMainWindow):
         self.progressbar = QProgressBar()
         self.message = QLabel("Ready")
         self.encoder = QLabel("Encoder")
+        self.terminal_btn = QPushButton()
+        self.terminal_view = TerminalView()
         self.executor = None
         self.init_ui()
+        # self.do_test()
 
     def init_ui(self):
         self.main_panel.set_items(TransCodaSettings.get_encode_list())
@@ -139,9 +188,15 @@ class TransCodaApp(QMainWindow):
             self.encoder.setText(TransCodaSettings.get_encoder_name())
         else:
             self.encoder.setText("No encoder selected.")
+        self.terminal_btn.setIcon(QIcon.fromTheme("utilities-terminal"))
+        self.terminal_btn.setFlat(True)
+        self.terminal_btn.setToolTip("Show Encoder Logs")
+        self.terminal_btn.clicked.connect(self.show_encode_logs)
         self.statusBar().addPermanentWidget(self.encoder, 0)
         self.statusBar().addPermanentWidget(QVLine())
         self.statusBar().addPermanentWidget(self.progressbar, 0)
+        self.statusBar().addPermanentWidget(self.terminal_btn, 0)
+
         self.setMinimumSize(800, 600)
         self.setWindowTitle(TransCoda.__APP_NAME__)
         self.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), "resource/soundconverter.svg")))
@@ -149,6 +204,18 @@ class TransCodaApp(QMainWindow):
         self.show()
         # Executed after the show, where all dimensions are calculated
         self.progressbar.setFixedWidth(self.progressbar.width())
+
+    def do_test(self):
+        command = "HandBrakeCLI -i /mnt/Stuff/testing/video/file_example_MP4_480_1_5MG.mp4 -o /mnt/Stuff/testing/video/file_example_MP4_480_1_5MG_ENC.mp4 -e x264"
+        runnables = [HandbrakeProcessRunner("/mnt/Stuff/testing/video/file_example_MP4_480_1_5MG.mp4", command)]
+        self.progressbar.setValue(0)
+        self.progressbar.setMaximum(len(runnables))
+        self.executor = CommonUtils.CommandExecutionFactory(runnables,
+                                                            logger=TransCoda.logger,
+                                                            max_threads=TransCodaSettings.get_max_threads())
+        self.executor.finish_event.connect(self.jobs_complete_event)
+        self.statusBar().showMessage(f"Dispatching {self.progressbar.maximum()} jobs for encoding")
+        self.executor.start()
 
     def toolbar_event(self, event_name):
         if event_name == "Add File":
@@ -207,6 +274,7 @@ class TransCodaApp(QMainWindow):
                                          delete_metadata=delete_metadata)
                 runnable.signals.result.connect(self.result_received_event)
                 runnable.signals.status.connect(self.status_received_event)
+                runnable.signals.log_message.connect(self.terminal_view.log_message)
                 runnables.append(runnable)
         except OutputDirectoryNotSet:
             QMessageBox.critical(self, "Error! Output directory not selected",
@@ -297,6 +365,10 @@ class TransCodaApp(QMainWindow):
         title += " " + cpu if cpu else ""
         title += " " + progress if progress else ""
         self.setWindowTitle(title)
+
+    def show_encode_logs(self):
+        self.terminal_view.show()
+
 
 def main():
     app = QApplication(sys.argv)

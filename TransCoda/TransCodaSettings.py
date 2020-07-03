@@ -1,3 +1,4 @@
+import json
 import pickle
 from enum import Enum, unique
 from functools import partial
@@ -8,7 +9,9 @@ from PyQt5.QtWidgets import QDialog, QCheckBox, QComboBox, QDialogButtonBox, QLa
 import TransCoda
 from CommonUtils import AppSettings, CommandExecutionFactory
 from CustomUI import FileChooserTextBox, QHLine
+from TransCoda import TransCodaEditor
 from TransCoda.Encoda import Encoders
+from TransCoda.TransCodaEditor import EncoderModel
 
 
 @unique
@@ -32,16 +35,18 @@ settings = AppSettings(
 class TransCodaSettings(QDialog):
 
     def __init__(self):
-        super(TransCodaSettings, self).__init__()
+        super().__init__()
         self.output_dir = FileChooserTextBox("Output :", "Select Output Directory", True)
         self.preserve_dir = QCheckBox("Preserve Directory Structure")
         self.overwrite_files = QCheckBox("Overwrite files if they exist")
         self.preserve_times = QCheckBox("Preserve original file times in result")
         self.delete_metadata = QCheckBox("Delete all tag information in result")
-        self.encoder = QComboBox()
+        with open(TransCodaEditor.get_config_file()) as json_file:
+            encoder_model = EncoderModel(json.load(json_file), disable_selections=True)
+            self.encoder = TransCodaEditor.EncoderSelector(encoder_model)
         self.max_threads = QSpinBox()
-        for e in Encoders:
-            self.encoder.addItem(str(e), e)
+        # for e in Encoders:
+        #     self.encoder.addItem(str(e), e)
         self.init_ui()
         self.load_settings_and_hooks()
 

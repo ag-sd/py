@@ -25,6 +25,10 @@ Trans:Coda lets you convert media from one format to another
 - [x] Extended columns available
 - [x] Column Sort
 - [ ] Configure Encoders from File
+- [ ] Support any encoder
+- [ ] Add Encoder history to skip files that have previously been encoded
+- [ ] Start Encoding largest/oldest/longest files first 
+- [ ] Profiles
 <del>
 - [ ] Extended format support<br>
   - [x] .aac<br>

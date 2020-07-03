@@ -1,17 +1,13 @@
 import datetime
-import json
 import os
-import re
-import shlex
-import subprocess
 from enum import Enum
-from shutil import which
 
-from PyQt5.QtCore import pyqtSignal, QObject
-from PyQt5.QtGui import QColor, QBrush, QPalette
+from PyQt5.QtGui import QColor, QBrush
 
 import CommonUtils
 import TransCoda
+from TransCoda import ProcessRunners
+from TransCoda.ProcessRunners import FFMPEGProcessRunner
 
 
 class Encoders(Enum):
@@ -93,30 +89,29 @@ class EncodaCommand(CommonUtils.Command):
         # Input file details
         input_stat = os.stat(self.input_file)
 
-        # Generate the command
-        cmd = f"ffmpeg" \
-              f" -hide_banner -loglevel repeat+verbose -y" \
-              f" {'-map_metadata -1' if self.delete_metadata else ''}" \
-              f" -i \"{self.input_file}\" {self.command} \"{self.output_file}\""
-
         # Start encoding
         try:
-            ffmpeg = FFMPEGProcessRunner(self.input_file, cmd)
-            ffmpeg.status_event.connect(self.status_event)
-            ffmpeg.run()
+            process_runner = ProcessRunners.runners_registry["ffmpeg"]
+            encoder = process_runner(input_file=self.input_file,
+                                     output_file=self.output_file,
+                                     base_command=self.command,
+                                     delete_metadata=self.delete_metadata)
+            encoder.status_event.connect(self.status_event)
+            encoder.message_event.connect(self.log_message)
+            encoder.run()
             cpu_time = (datetime.datetime.now() - start_time).total_seconds()
             output_stat = os.stat(self.output_file)
             ratio = 100 - (output_stat.st_size / input_stat.st_size) * 100
             if self.preserve_timestamps:
                 os.utime(self.output_file, (input_stat.st_atime, input_stat.st_mtime))
             self.signals.result.emit(
-                [self.create_result(cmd, EncodaStatus.SUCCESS,
+                [self.create_result(EncodaStatus.SUCCESS,
                                     f"Time taken {CommonUtils.human_readable_time(cpu_time)}",
                                     cpu_time, ratio, output_stat.st_size)])
         except Exception as g:
             cpu_time = (datetime.datetime.now() - start_time).total_seconds()
             TransCoda.logger.error(g)
-            self.signals.result.emit([self.create_result(cmd, EncodaStatus.ERROR, str(g), cpu_time, 0, 0)])
+            self.signals.result.emit([self.create_result(EncodaStatus.ERROR, str(g), cpu_time, 0, 0)])
 
     def status_event(self, _file, total, completed):
         from TransCoda.MainPanel import ItemKeys
@@ -128,12 +123,20 @@ class EncodaCommand(CommonUtils.Command):
             }
         )
 
-    def create_result(self, cmd, status, messages, cpu_time, compression_ratio, op_file_size):
+    def log_message(self, _file, time, message):
+        self.signals.log_message.emit(
+            {
+                "file": _file,
+                "time": time,
+                "message": message
+            }
+        )
+
+    def create_result(self, status, messages, cpu_time, compression_ratio, op_file_size):
         from TransCoda.MainPanel import ItemKeys
         response = {
             ItemKeys.input_file_name: self.input_file,
             ItemKeys.output_file_name: self.output_file,
-            ItemKeys.encoder_command: cmd,
             ItemKeys.status: status,
             ItemKeys.messages: messages,
             ItemKeys.cpu_time: cpu_time,
@@ -147,64 +150,3 @@ class EncodaCommand(CommonUtils.Command):
         return response
 
 
-class FFMPEGNotFoundException(Exception):
-    """Thrown when FFMPEG was not found in the system"""
-
-
-class FFPROBEMetadataFetch(object):
-
-    def __init__(self):
-        super().__init__()
-        self._command_args = "ffprobe -hide_banner -v info -show_format -show_streams -of json "
-
-    def get_metadata(self, file):
-        cmd = self._command_args + f"\"{file}\""
-        process = subprocess.Popen(
-            shlex.split(cmd),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            universal_newlines=True
-        )
-        output, stderr = process.communicate()
-
-        return json.loads(output)
-
-
-class FFMPEGProcessRunner(QObject):
-    status_event = pyqtSignal(str, int, int)
-
-    def __init__(self, file_name, command):
-        super().__init__()
-        self.file_name = file_name
-        self.command = command
-        if which("ffmpeg") is None:
-            raise FFMPEGNotFoundException
-
-    def run(self):
-        process = subprocess.Popen(
-            shlex.split(self.command),
-            stdin=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            universal_newlines=True
-        )
-
-        duration_found = False
-        time_seeking = False
-        total_secs = 0
-        for line in process.stderr:
-            if not duration_found:
-                dur = re.search("duration: [0-9:]+", line.lower())
-                if dur:
-                    total_secs = self.get_seconds(dur.group(0)[10:])
-                    duration_found = True
-                    time_seeking = True
-            elif time_seeking:
-                time = re.search("time=[0-9:]+", line.lower())
-                if time:
-                    completed = self.get_seconds(time.group(0)[5:])
-                    self.status_event.emit(self.file_name, total_secs, completed)
-
-    @staticmethod
-    def get_seconds(string):
-        h, m, s = string.split(':')
-        return int(datetime.timedelta(hours=int(h), minutes=int(m), seconds=int(s)).total_seconds())
