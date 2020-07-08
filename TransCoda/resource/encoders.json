@@ -77,5 +77,14 @@
                 "extension": ".mp3"
             }
         }
+    },
+    "Video": {
+        "General Video": {
+            "Autocode": {
+                "extension": "*",
+                "executable": "HandBrakeCLI",
+                "command": "-t 1 --angle 1 -c 1 -f mp4  --detelecine -w 640 --crop 0:0:0:0 --loose-anamorphic  --modulus 2 -e x264 -q 22 -r 30 --pfr -a none  --audio-fallback ac3 --markers=\"/tmp/chapter.csv\" --encoder-preset=veryslow  --encoder-tune=\"film\"  --encoder-level=\"3.1\"  --encoder-profile=high  --verbose=1"
+            }
+        }
     }
 }

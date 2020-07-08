@@ -7,18 +7,18 @@ from PyQt5 import QtCore
 from PyQt5.QtCore import (pyqtSignal, QSize, QUrl)
 from PyQt5.QtGui import QIcon, QTextCursor, QFontDatabase
 from PyQt5.QtWidgets import QApplication, QMainWindow, QToolBar, \
-    QFileDialog, QProgressBar, QMessageBox, QLabel, QFrame, QPushButton, QDialog, QTextEdit, QHBoxLayout, QComboBox, \
+    QFileDialog, QProgressBar, QMessageBox, QLabel, QPushButton, QDialog, QTextEdit, QComboBox, \
     QVBoxLayout
 
 import CommonUtils
 import TransCoda
 from CustomUI import QVLine
-from TransCoda import MediaMetaData
-from TransCoda.Encoda import EncodaCommand, EncodaStatus
+from TransCoda import MediaMetaData, TransCodaSettings
+from TransCoda.Encoda import EncodaStatus, EncodaCommand
 from TransCoda.MainPanel import MainPanel, OutputDirectoryNotSet, EncoderNotSelected, ItemKeys
 from TransCoda.MediaMetaData import MetaDataFields
 from TransCoda.ProcessRunners import HandbrakeProcessRunner
-from TransCoda.TransCodaSettings import TransCodaSettings, SettingsKeys
+from TransCoda.TransCodaSettings import SettingsKeys
 
 
 class MetadataRetriever(CommonUtils.Command):
@@ -173,7 +173,6 @@ class TransCodaApp(QMainWindow):
         self.terminal_view = TerminalView()
         self.executor = None
         self.init_ui()
-        # self.do_test()
 
     def init_ui(self):
         self.main_panel.set_items(TransCodaSettings.get_encode_list())
@@ -200,7 +199,7 @@ class TransCodaApp(QMainWindow):
         self.setMinimumSize(800, 600)
         self.setWindowTitle(TransCoda.__APP_NAME__)
         self.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), "resource/soundconverter.svg")))
-        TransCodaSettings.settings_container.settings_change_event.connect(self.settings_changed)
+        TransCodaSettings.settings.settings_change_event.connect(self.settings_changed)
         self.show()
         # Executed after the show, where all dimensions are calculated
         self.progressbar.setFixedWidth(self.progressbar.width())
@@ -227,7 +226,7 @@ class TransCodaApp(QMainWindow):
             if not _dir.isEmpty():
                 self.files_changed_event(True, [_dir])
         elif event_name == "Settings":
-            TransCodaSettings().exec()
+            TransCodaSettings.TransCodaSettings().exec()
         elif event_name == "Clear":
             self.main_panel.clear_table()
             TransCodaSettings.save_encode_list(self.main_panel.get_items())
@@ -259,19 +258,11 @@ class TransCodaApp(QMainWindow):
 
     def validate_and_start_encoding(self, run_indices=None):
         runnables = []
-        overwrite_if_exists = TransCodaSettings.get_overwrite_if_exists()
-        preserve_timestamps = TransCodaSettings.get_preserve_timestamps()
-        delete_metadata = TransCodaSettings.get_delete_metadata()
         try:
-            for index, (_input, _output, _command) in enumerate(self.main_panel.generate_commands()):
+            for index, file_item in enumerate(self.main_panel.get_items(item_type=ItemKeys.input_file_name)):
                 if run_indices and not run_indices.__contains__(index):
                     continue
-                runnable = EncodaCommand(input_file=_input,
-                                         output_file=_output,
-                                         command=_command,
-                                         overwrite_if_exists=overwrite_if_exists,
-                                         preserve_timestamps=preserve_timestamps,
-                                         delete_metadata=delete_metadata)
+                runnable = EncodaCommand(file_item)
                 runnable.signals.result.connect(self.result_received_event)
                 runnable.signals.status.connect(self.status_received_event)
                 runnable.signals.log_message.connect(self.terminal_view.log_message)
@@ -345,7 +336,7 @@ class TransCodaApp(QMainWindow):
             self.executor.start()
 
     def settings_changed(self, setting, value):
-        valid_keys = {SettingsKeys.encoder}
+        valid_keys = {SettingsKeys.encoder_path}
         if setting in valid_keys:
             self.encoder.setText(TransCodaSettings.get_encoder_name())
 
@@ -372,7 +363,7 @@ class TransCodaApp(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    ex = TransCodaApp()
+    _ = TransCodaApp()
     sys.exit(app.exec_())
 
 

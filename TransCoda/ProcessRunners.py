@@ -29,19 +29,18 @@ class HandbrakeProcessRunner(QObject):
         )
 
         for line in process.stdout:
-            self.message_event.emit(self.file_name, datetime.datetime.now(), line)
+            self.message_event.emit(self.input_file, datetime.datetime.now(), line)
             progress = re.search("Encoding: task 1 of 1", line)
             if progress:
                 txt = line.replace("Encoding: task 1 of 1, ", "")
                 tokens = txt.split("%")
-                print(f"PERCENT FOUND --> {tokens[0]}")
-                self.status_event.emit(self.file_name, 100, float(tokens[0]))
+                self.status_event.emit(self.input_file, 100, float(tokens[0]))
             elif line.startswith("Encode done!"):
-                print("ENCODING DONE")
-                self.status_event.emit(self.file_name, 100, 100)
+                self.status_event.emit(self.input_file, 100, 100)
 
     def generate_command(self):
-        pass
+        return f"HandBrakeCLI"\
+               f" -i \"{self.input_file}\" {self.base_command} -o \"{self.output_file}\""
 
 
 class FFMPEGProcessRunner(QObject):
@@ -100,5 +99,5 @@ class EncoderNotFoundException(Exception):
 
 runners_registry = {
     "ffmpeg": FFMPEGProcessRunner,
-    "HandbrakeCLI": HandbrakeProcessRunner
+    "HandBrakeCLI": HandbrakeProcessRunner
 }

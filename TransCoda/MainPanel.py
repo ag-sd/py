@@ -1,7 +1,6 @@
 import os
 from collections import Mapping
 from enum import Enum
-from os import path
 
 from PyQt5.QtCore import (Qt, pyqtSignal, QAbstractTableModel, QVariant, QFileInfo, QModelIndex, QMimeDatabase,
                           QMargins)
@@ -10,8 +9,9 @@ from PyQt5.QtWidgets import QTableView, QAbstractItemView, QFileIconProvider, QM
     QStyleOptionProgressBar, QApplication, QStyle
 
 import CommonUtils
+from TransCoda import TransCodaSettings
 from TransCoda.Encoda import EncodaStatus
-from TransCoda.TransCodaSettings import TransCodaSettings, SettingsKeys
+from TransCoda.TransCodaSettings import SettingsKeys
 
 
 class OutputDirectoryNotSet(Exception):
@@ -190,8 +190,11 @@ class MainPanel(QTableView):
             else:
                 items_copy = []
                 for item in self.file_items:
-                    copy = item.copy()
-                    del(copy[ItemKeys.icon])
+                    if item_type is not None and item_type in item:
+                        copy = item[item_type]
+                    else:
+                        copy = item.copy()
+                        del(copy[ItemKeys.icon])
                     items_copy.append(copy)
                 return items_copy
 
@@ -268,23 +271,6 @@ class MainPanel(QTableView):
                 del(self.columnHeaders[del_index])
                 self.endRemoveColumns()
 
-        def generate_commands(self):
-            for file_item in self.file_items:
-                if ItemKeys.output_file_dir not in file_item \
-                        or file_item[ItemKeys.output_file_dir] == self._value_not_set:
-                    raise OutputDirectoryNotSet
-                elif ItemKeys.encoder not in file_item \
-                        or file_item[ItemKeys.encoder] == self._value_not_set:
-                    raise EncoderNotSelected
-                elif file_item[ItemKeys.status] == EncodaStatus.READY or \
-                        file_item[ItemKeys.status] == EncodaStatus.WAITING:
-                    _input = file_item[ItemKeys.input_file_name]
-                    _encoder = TransCodaSettings.get_encoder()
-                    _, file = path.split(file_item[ItemKeys.input_file_name])
-                    name, _ = path.splitext(file)
-                    _output = path.join(file_item[ItemKeys.output_file_dir], name + _encoder.extension)
-                    yield _input, _output, _encoder.command
-
         def create_entries(self, urls):
             items_to_add = []
             for q_url in urls:
@@ -300,7 +286,6 @@ class MainPanel(QTableView):
                     item[ItemKeys.input_file_type] = self.mime_database.mimeTypeForFile(local_file).name()
                     # item[ItemKeys.icon] = QFileIconProvider().icon(info)
                     item[ItemKeys.status] = EncodaStatus.READING_METADATA
-
                     self.set_output_details(item)
                     items_to_add.append(item)
             return items_to_add
@@ -308,19 +293,13 @@ class MainPanel(QTableView):
         def set_output_details(self, file_item):
             output_dir = TransCodaSettings.get_output_dir()
             encoder = TransCodaSettings.get_encoder_name()
-            preserve_dir = TransCodaSettings.get_preserve_dir()
 
             # Set all default values first
             file_item[ItemKeys.output_file_dir] = self._value_not_set
             file_item[ItemKeys.encoder] = self._value_not_set
 
             if output_dir is not None:
-                _, file_path = path.splitdrive(file_item[ItemKeys.input_file_name])
-                file_path, file = path.split(file_path)
-                if preserve_dir:
-                    file_item[ItemKeys.output_file_dir] = output_dir + file_path
-                else:
-                    file_item[ItemKeys.output_file_dir] = output_dir
+                file_item[ItemKeys.output_file_dir] = output_dir
 
             if encoder is not None:
                 file_item[ItemKeys.encoder] = encoder
@@ -354,7 +333,7 @@ class MainPanel(QTableView):
         self.setSortingEnabled(True)
         self.file_model = None
         self.clear_table()
-        TransCodaSettings.settings_container.settings_change_event.connect(self.settings_changed)
+        TransCodaSettings.settings.settings_change_event.connect(self.settings_changed)
         self.menu = self.create_context_menu()
         # self.attribute_table_view.setItemDelegateForColumn(column_icon, delegate)
         self.progressbarDelegate = MainPanel.ProgressBarDelegate(parent=self)
@@ -419,8 +398,8 @@ class MainPanel(QTableView):
         for i in range(self.file_model.columnCount(self)):
             self.resizeColumnToContents(i)
 
-    def generate_commands(self):
-        return self.file_model.generate_commands()
+    # def generate_commands(self):
+    #     return self.file_model.generate_commands()
 
     def encoding_started(self, run_index):
         self.file_model.encoding_started(run_index)
@@ -440,10 +419,10 @@ class MainPanel(QTableView):
     def update_item_status(self, item_indices, new_status):
         self.file_model.update_item_status(item_indices, new_status)
 
-    def settings_changed(self, setting, value):
+    def settings_changed(self, setting, _):
         valid_keys = {SettingsKeys.output_dir,
                       SettingsKeys.preserve_dir,
-                      SettingsKeys.encoder}
+                      SettingsKeys.encoder_path}
         if setting in valid_keys:
             self.file_model.refresh_all_output_details()
             TransCodaSettings.save_encode_list(self.file_model.get_items())
@@ -455,7 +434,7 @@ class MainPanel(QTableView):
         if len(rows) > 0:
             self.menu_item_event.emit(item_name, rows)
 
-    def get_header_context_menu(self, event):
+    def get_header_context_menu(self, _):
         # Get Available Headers
         available = sorted(ItemKeys.__headers__, key=lambda key: key.display_name)
         # Get Selected Headers
@@ -482,5 +461,3 @@ class MainPanel(QTableView):
 
     def get_column_key(self, index):
         return self.file_model.get_column_key(index)
-
-

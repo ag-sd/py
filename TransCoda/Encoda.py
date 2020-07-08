@@ -6,38 +6,7 @@ from PyQt5.QtGui import QColor, QBrush
 
 import CommonUtils
 import TransCoda
-from TransCoda import ProcessRunners
-from TransCoda.ProcessRunners import FFMPEGProcessRunner
-
-
-class Encoders(Enum):
-    __lookup__ = {}
-
-    Mp3_VBR_Very_High_220_to_260_kBits = "-codec:a libmp3lame -qscale:a 0", ".mp3"
-    Mp3_VBR_High_170_to_210_kBits = "-codec:a libmp3lame -qscale:a 2", ".mp3"
-    Mp3_VBR_Medium_140_to_185_kBits = "-codec:a libmp3lame -qscale:a 4", ".mp3"
-    Mp3_VBR_Low_100_to_130_kBits = "-codec:a libmp3lame -qscale:a 6", ".mp3"
-    Mp3_VBR_Acceptable_70k_to_105_kBits = "-codec:a libmp3lame -qscale:a 8", ".mp3"
-
-    Mp3_CBR_Very_High_320_kBits = "-codec:a libmp3lame -b:a 320k", ".mp3"
-    Mp3_CBR_High_192_kBits = "-codec:a libmp3lame -b:a 192k", ".mp3"
-    Mp3_CBR_Medium_128_kBits = "-codec:a libmp3lame -b:a 128k", ".mp3"
-    Mp3_CBR_Low_96_kBits = "-codec:a libmp3lame -b:a 96k", ".mp3"
-    Mp3_CBR_Acceptable_48_kBits = "-codec:a libmp3lame -b:a 48k", ".mp3"
-
-    Mp3_ABR_Very_High_320_kBits = "-codec:a libmp3lame -b:a 320k abr", ".mp3"
-    Mp3_ABR_High_192_kBits = "-codec:a libmp3lame -b:a 192k abr", ".mp3"
-    Mp3_ABR_Medium_128_kBits = "-codec:a libmp3lame -b:a 128k abr", ".mp3"
-    Mp3_ABR_Low_96_kBits = "-codec:a libmp3lame -b:a 96k abr", ".mp3"
-    Mp3_ABR_Acceptable_48_kBits = "-codec:a libmp3lame -b:a 48k abr", ".mp3"
-
-    def __init__(self, command, extension):
-        self.command = command
-        self.extension = extension
-        self.__class__.__lookup__[self.__str__()] = self
-
-    def __str__(self):
-        return self.name.replace("_", " ")
+from TransCoda import ProcessRunners, TransCodaSettings
 
 
 class EncodaStatus(Enum):
@@ -57,61 +26,83 @@ class EncodaStatus(Enum):
         return self.name
 
 
+class TranscodaError(Exception):
+    """Thrown when Transcoda encounters an error"""
+
+
 class EncodaCommand(CommonUtils.Command):
 
-    def __init__(self, input_file, output_file, command,
-                 overwrite_if_exists=True,
-                 preserve_timestamps=False,
-                 delete_metadata=False):
+    def __init__(self, input_file):
         super().__init__()
         self.input_file = input_file
-        self.output_file = output_file
-        self.command = command
-        self.overwrite_if_exists = overwrite_if_exists
-        self.preserve_timestamps = preserve_timestamps
-        self.delete_metadata = delete_metadata
+
+    def get_output_file(self, encoder):
+        # Ensure the input file exists
+        if not os.path.exists(self.input_file):
+            raise TranscodaError("Input File could not be found on the file system")
+
+        # Determine output file
+        _, file_path = os.path.splitdrive(self.input_file)
+        file_path, file = os.path.split(file_path)
+        name, extension = os.path.splitext(file)
+
+        output_dir = TransCodaSettings.get_output_dir() + file_path \
+            if TransCodaSettings.get_preserve_dir() else TransCodaSettings.get_output_dir()
+
+        if encoder["extension"] == "*":
+            output_file = os.path.join(output_dir, name + extension)
+        else:
+            output_file = os.path.join(output_dir, name + encoder["extension"])
+
+        # Overwrite if exists only
+        if os.path.exists(output_file) and not TransCodaSettings.get_overwrite_if_exists():
+            raise TranscodaError(f"Output file {output_file} already exists!")
+
+        # Ensure path exists
+        os.makedirs(output_dir, exist_ok=True)
+
+        return output_file
 
     def do_work(self):
         start_time = datetime.datetime.now()
-        # Ensure the input file exists
-        if not os.path.exists(self.input_file):
-            self.signals.result.emit(self.create_result(EncodaStatus.ERROR, "Input file missing!"))
+        encoder = TransCodaSettings.get_encoder()
+        try:
+            output_file = self.get_output_file(encoder)
+        except Exception as g:
+            self.emit_exception(start_time, g, None)
             return
-        # Ensure output path exists
-        path, _ = os.path.split(self.output_file)
-        # Overwrite if exists only
-        if os.path.exists(self.output_file) and not self.overwrite_if_exists:
-            cpu_time = (datetime.datetime.now() - start_time).total_seconds()
-            self.signals.result.emit(
-                [self.create_result("", EncodaStatus.ERROR, f"{self.output_file} exists", cpu_time, 0, 0)])
-            return
-        os.makedirs(path, exist_ok=True)
-        # Input file details
+
         input_stat = os.stat(self.input_file)
 
         # Start encoding
         try:
-            process_runner = ProcessRunners.runners_registry["ffmpeg"]
-            encoder = process_runner(input_file=self.input_file,
-                                     output_file=self.output_file,
-                                     base_command=self.command,
-                                     delete_metadata=self.delete_metadata)
-            encoder.status_event.connect(self.status_event)
-            encoder.message_event.connect(self.log_message)
-            encoder.run()
+            executable = encoder["executable"]
+            if executable not in ProcessRunners.runners_registry:
+                raise TranscodaError(f"Unable to find a process handler for executable {executable}")
+            process_runner = ProcessRunners.runners_registry[executable]
+            runner = process_runner(input_file=self.input_file,
+                                    output_file=output_file,
+                                    base_command=encoder["command"],
+                                    delete_metadata=TransCodaSettings.get_delete_metadata())
+            runner.status_event.connect(self.status_event)
+            runner.message_event.connect(self.log_message)
+            runner.run()
             cpu_time = (datetime.datetime.now() - start_time).total_seconds()
-            output_stat = os.stat(self.output_file)
+            output_stat = os.stat(output_file)
             ratio = 100 - (output_stat.st_size / input_stat.st_size) * 100
-            if self.preserve_timestamps:
-                os.utime(self.output_file, (input_stat.st_atime, input_stat.st_mtime))
+            if TransCodaSettings.get_preserve_timestamps():
+                os.utime(output_file, (input_stat.st_atime, input_stat.st_mtime))
             self.signals.result.emit(
                 [self.create_result(EncodaStatus.SUCCESS,
-                                    f"Time taken {CommonUtils.human_readable_time(cpu_time)}",
-                                    cpu_time, ratio, output_stat.st_size)])
+                                    f"Time taken {CommonUtils.human_readable_time(cpu_time)}", cpu_time, ratio,
+                                    CommonUtils.human_readable_filesize(output_stat.st_size), output_file)])
         except Exception as g:
-            cpu_time = (datetime.datetime.now() - start_time).total_seconds()
-            TransCoda.logger.error(g)
-            self.signals.result.emit([self.create_result(EncodaStatus.ERROR, str(g), cpu_time, 0, 0)])
+            self.emit_exception(start_time, g, output_file)
+
+    def emit_exception(self, start_time, exception, output_file):
+        cpu_time = (datetime.datetime.now() - start_time).total_seconds()
+        TransCoda.logger.exception(exception)
+        self.signals.result.emit([self.create_result(EncodaStatus.ERROR, str(exception), cpu_time, 0, 0, output_file)])
 
     def status_event(self, _file, total, completed):
         from TransCoda.MainPanel import ItemKeys
@@ -132,11 +123,11 @@ class EncodaCommand(CommonUtils.Command):
             }
         )
 
-    def create_result(self, status, messages, cpu_time, compression_ratio, op_file_size):
+    def create_result(self, status, messages, cpu_time, compression_ratio, op_file_size, output_file):
         from TransCoda.MainPanel import ItemKeys
         response = {
             ItemKeys.input_file_name: self.input_file,
-            ItemKeys.output_file_name: self.output_file,
+            ItemKeys.output_file_name: output_file,
             ItemKeys.status: status,
             ItemKeys.messages: messages,
             ItemKeys.cpu_time: cpu_time,
@@ -148,5 +139,3 @@ class EncodaCommand(CommonUtils.Command):
                 ItemKeys.percent_compete: "100%"
             })
         return response
-
-
