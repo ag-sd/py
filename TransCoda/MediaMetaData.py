@@ -145,3 +145,22 @@ if __name__ == '__main__':
         print("dispatching " + _file)
         meta = get_metadata(_file)
         print(meta)
+
+
+class FFPROBEMetadataFetch(object):
+
+    def __init__(self):
+        super().__init__()
+        self._command_args = "ffprobe -hide_banner -v info -show_format -show_streams -of json "
+
+    def get_metadata(self, file):
+        cmd = self._command_args + f"\"{file}\""
+        process = subprocess.Popen(
+            shlex.split(cmd),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True
+        )
+        output, stderr = process.communicate()
+
+        return json.loads(output)

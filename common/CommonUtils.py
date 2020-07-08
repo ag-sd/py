@@ -42,10 +42,11 @@ def human_readable_filesize(size, decimal_places=2):
     return f"{size:.{decimal_places}f}{unit}"
 
 
-def create_toolbar_action(tooltip, icon, func):
+def create_toolbar_action(tooltip, icon, func, text=""):
     action = QAction("")
     action.setToolTip(tooltip)
     action.setIcon(icon)
+    action.setText(text)
     action.triggered.connect(func)
     return action
 

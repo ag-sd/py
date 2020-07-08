@@ -1,0 +1,90 @@
+{
+    "Audio": {
+        "Mp3": {
+            "Variable Bitrate Very High 220 to 260 kBits": {
+                "executable": "ffmpeg",
+                "command": "-codec:a libmp3lame -qscale:a 0",
+                "extension": ".mp3"
+            },
+            "Variable Bitrate High 170 to 210 kBits": {
+                "executable": "ffmpeg",
+                "command": "-codec:a libmp3lame -qscale:a 2",
+                "extension": ".mp3"
+            },
+            "Variable Bitrate Medium 140 to 185 kBits": {
+                "executable": "ffmpeg",
+                "command": "-codec:a libmp3lame -qscale:a 4",
+                "extension": ".mp3"
+            },
+            "Variable Bitrate Low 100 to 130 kBits": {
+                "executable": "ffmpeg",
+                "command": "-codec:a libmp3lame -qscale:a 6",
+                "extension": ".mp3"
+            },
+            "Variable Bitrate Acceptable 70k to 105 kBits": {
+                "executable": "ffmpeg",
+                "command": "-codec:a libmp3lame -qscale:a 8",
+                "extension": ".mp3"
+            },
+            "Constant Bitrate Very High 320 kBits": {
+                "executable": "ffmpeg",
+                "command": "-codec:a libmp3lame -b:a 320k",
+                "extension": ".mp3"
+            },
+            "Constant Bitrate High 192 kBits": {
+                "executable": "ffmpeg",
+                "command": "-codec:a libmp3lame -b:a 192k",
+                "extension": ".mp3"
+            },
+            "Constant Bitrate Medium 128 kBits": {
+                "executable": "ffmpeg",
+                "command": "-codec:a libmp3lame -b:a 128k",
+                "extension": ".mp3"
+            },
+            "Constant Bitrate Low 96 kBits": {
+                "executable": "ffmpeg",
+                "command": "-codec:a libmp3lame -b:a 96k",
+                "extension": ".mp3"
+            },
+            "Constant Bitrate Acceptable 48 kBits": {
+                "executable": "ffmpeg",
+                "command": "-codec:a libmp3lame -b:a 48k",
+                "extension": ".mp3"
+            },
+            "Average Bitrate Very High 320 kBits": {
+                "executable": "ffmpeg",
+                "command": "-codec:a libmp3lame -b:a 320k abr",
+                "extension": ".mp3"
+            },
+            "Average Bitrate High 192 kBits": {
+                "executable": "ffmpeg",
+                "command": "-codec:a libmp3lame -b:a 192k abr",
+                "extension": ".mp3"
+            },
+            "Average Bitrate Medium 128 kBits": {
+                "executable": "ffmpeg",
+                "command": "-codec:a libmp3lame -b:a 128k abr",
+                "extension": ".mp3"
+            },
+            "Average Bitrate Low 96 kBits": {
+                "executable": "ffmpeg",
+                "command": "-codec:a libmp3lame -b:a 96k abr",
+                "extension": ".mp3"
+            },
+            "Average Bitrate Acceptable 48 kBits": {
+                "executable": "ffmpeg",
+                "command": "-codec:a libmp3lame -b:a 48k abr",
+                "extension": ".mp3"
+            }
+        }
+    },
+    "Video": {
+        "General Video": {
+            "Autocode": {
+                "extension": "*",
+                "executable": "HandBrakeCLI",
+                "command": "-t 1 --angle 1 -c 1 -f mp4  --detelecine -w 640 --crop 0:0:0:0 --loose-anamorphic  --modulus 2 -e x264 -q 22 -r 30 --pfr -a none  --audio-fallback ac3 --markers=\"/tmp/chapter.csv\" --encoder-preset=veryslow  --encoder-tune=\"film\"  --encoder-level=\"3.1\"  --encoder-profile=high  --verbose=1"
+            }
+        }
+    }
+}
