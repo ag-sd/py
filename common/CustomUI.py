@@ -3,6 +3,7 @@ import sys
 from os import path
 
 from PyQt5.QtCore import (QDir, Qt, QUrl, QParallelAnimationGroup, QPropertyAnimation, QAbstractAnimation, pyqtSignal)
+from PyQt5.QtGui import QDropEvent, QPalette, QDragLeaveEvent
 from PyQt5.QtWidgets import \
     (QWidget,
      QLabel,
@@ -25,6 +26,8 @@ class FileChooserTextBox(QWidget):
         self.dir = _dir
         if path.exists(initial_selection):
             self.selection = initial_selection
+        else:
+            self.selection = ""
         self.text = QLineEdit()
         self.lbl_align_right = lbl_align_right
         self.initUI()
@@ -69,6 +72,45 @@ class FileChooserTextBox(QWidget):
         if path.exists(selection):
             self.selection = selection
             self.text.setText(selection)
+
+
+class DropZone(QLabel):
+    files_dropped_event = pyqtSignal('PyQt_PyObject')
+
+    def __init__(self):
+        super().__init__()
+        self.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
+        self.setText("Drag and drop files here")
+        self.setAlignment(Qt.AlignCenter)
+        self.setAcceptDrops(True)
+        self.setAutoFillBackground(True)
+        self.setMinimumWidth(300)
+        self.dropped_files = None
+
+    def dragEnterEvent(self, event: QDropEvent):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+            self.setFrameStyle(QFrame.StyledPanel | QFrame.Sunken)
+            self.setBackgroundRole(QPalette.Light)
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event: QDropEvent):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QDropEvent):
+        if event.mimeData().hasUrls():
+            self.dropped_files = event.mimeData().urls()
+            self.files_dropped_event.emit(self.dropped_files)
+        self.setBackgroundRole(QPalette.Window)
+        self.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
+
+    def dragLeaveEvent(self, event: QDragLeaveEvent):
+        self.setBackgroundRole(QPalette.Window)
+        self.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
 
 
 class ListWidgetDragDrop(QListWidget):
@@ -164,7 +206,7 @@ class FileChooserListBox(QWidget):
             file, _filter = QFileDialog.getOpenFileName(self, caption=self.cue)
 
         selection = QDir.toNativeSeparators(file)
-        if selection is not "":
+        if selection != "":
             item = QListWidgetItem(selection)
             self.list_box.addItem(item)
 

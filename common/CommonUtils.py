@@ -3,9 +3,10 @@ import hashlib
 import logging
 import os
 import subprocess
+from functools import partial
 from os import path
 
-from PyQt5.QtCore import QObject, pyqtSignal, QSettings, QThread, QThreadPool
+from PyQt5.QtCore import QObject, pyqtSignal, QSettings, QThread, QThreadPool, QRunnable
 from PyQt5.QtWidgets import QCheckBox, QRadioButton, QGroupBox, QWidget, QSplitter, QAction
 
 from common.CustomUI import FileChooserTextBox
@@ -35,11 +36,22 @@ def calculate_sha256_hash(file):
 
 
 def human_readable_filesize(size, decimal_places=2):
+    size = float(size)
     for unit in ['B', 'KiB', 'MiB', 'GiB', 'TiB']:
         if size < 1024.0:
             break
         size /= 1024.0
     return f"{size:.{decimal_places}f}{unit}"
+
+
+def human_readable_time(seconds):
+    seconds = int(float(seconds))
+    _hrs = 0
+    _min = 0
+    _sec = 0
+    _min, _sec = divmod(seconds, 60)
+    _hrs, _min = divmod(_min, 60)
+    return f"{_hrs:02}:{_min:02}:{_sec:02}"
 
 
 def create_toolbar_action(tooltip, icon, func, text=""):
@@ -48,6 +60,23 @@ def create_toolbar_action(tooltip, icon, func, text=""):
     action.setIcon(icon)
     action.setText(text)
     action.triggered.connect(func)
+    return action
+
+
+def create_action(parent, name, func, shortcut=None, tooltip=None, icon=None, checked=None):
+    action = QAction(name, parent)
+    if shortcut is not None:
+        action.setShortcut(shortcut)
+    if tooltip is not None:
+        if shortcut is not None:
+            tooltip = f"{tooltip} ({shortcut})"
+        action.setToolTip(tooltip)
+    action.triggered.connect(partial(func, name))
+    if icon is not None:
+        action.setIcon(icon)
+    if checked is not None:
+        action.setCheckable(True)
+        action.setChecked(checked)
     return action
 
 
@@ -187,17 +216,7 @@ class FileScanner:
             :param recurse: Recurse into subdirectories
             :return: List of files found in the path sorted in descending order of file size
         """
-        rejected_files = []
-        dirs = []
-        files = []
-        for file in file_urls:
-            if path.isdir(file):
-                dirs.append(file)               # Save it if dir
-            elif self.is_supported(file):
-                files.append(file)              # Process it if a supported file
-            else:
-                rejected_files.append(file)     # Reject it if not a dir or supported file
-        return self._walk(dirs, files, [], recurse)
+        return self._scan_files(file_urls, recurse, None)
 
     def _scan_q_files(self, file_urls, recurse):
         """
@@ -206,15 +225,37 @@ class FileScanner:
             :param recurse: Recurse into subdirectories
             :return: List of files found in the path sorted in descending order of file size
         """
+        def qfile_to_file(qfile):
+            if qfile.isLocalFile():
+                return qfile.toLocalFile()
+            else:
+                return None
+        return self._scan_files(file_urls, recurse, qfile_to_file)
+
+    def _scan_files(self, file_urls, recurse, normalizing_function=None):
+        """
+            Routine for finding all files in a directory
+            :param file_urls: the paths to find files in
+            :param recurse: Recurse into subdirectories
+            :param normalizing_function used to convert the file_url from any non standard format to a string
+            :return: List of files found in the path sorted in descending order of file size
+        """
+        rejected_files = []
         dirs = []
         files = []
         for file in file_urls:
-            if file.isLocalFile():
-                local_file = file.toLocalFile()
-                if os.path.isdir(local_file):
-                    dirs.append(local_file)
-                elif self.is_supported(local_file):
-                    files.append(local_file)
+            if normalizing_function is None:
+                normalized_file = file
+            else:
+                normalized_file = normalizing_function(file)
+            if normalized_file is None:
+                rejected_files.append(normalized_file)  # Reject it if cannot be normalized
+            elif path.isdir(normalized_file):
+                dirs.append(normalized_file)            # Save it if dir
+            elif self.is_supported(normalized_file):
+                files.append(normalized_file)           # Process it if a supported file
+            else:
+                rejected_files.append(normalized_file)  # Reject it if not a dir or supported file
         return self._walk(dirs, files, [], recurse)
 
     def _walk(self, dirs, files, rejects, recurse):
@@ -243,82 +284,96 @@ class ProcessRunnerException(Exception):
         self.exit_code = exit_code
         self.stdout = stdout
         self.stderr = stderr
-        self.message = "`{0}` exited with status {1}\n\nSTDOUT:\n{2}\n\nSTDERR:\n{3}".format(
-            self.cmd,
-            exit_code,
-            (stdout or b'').decode(),
-            (stderr or b'').decode()
-        )
+        self.message = f"`{self.cmd}` exited with status {exit_code}" \
+                       f"\n\nSTDOUT:\n{(stdout or b'').decode()}" \
+                       f"\n\nSTDERR:\n{(stderr or b'').decode()}"
 
 
-class ProcessRunner(object):
-    def __init__(self, command):
-        self.command = command
+class CommandSignals(QObject):
+    result = pyqtSignal('PyQt_PyObject')
+    complete = pyqtSignal('PyQt_PyObject')
+    status = pyqtSignal('PyQt_PyObject')
+    log_message = pyqtSignal('PyQt_PyObject')
 
-    def run(self, stdout=None, stderr=None):
-        process = subprocess.Popen(
-            self.command,
-            stdin=subprocess.PIPE,
-            stdout=stdout,
-            stderr=stderr,
-            shell=True
-        )
-        out = process.communicate()
 
-        if process.returncode != 0:
-            raise ProcessRunnerException(self.command, process.returncode, out[0], out[1])
+class Command(QRunnable):
+    def __init__(self):
+        super().__init__()
+        self.signals = CommandSignals()
 
-        return out
+    def run(self):
+        start_time = datetime.datetime.now()
+        self.do_work()
+        end_time = datetime.datetime.now()
+        self.signals.complete.emit((end_time - start_time).total_seconds())
+
+    def do_work(self):
+        pass
 
 
 class CommandExecutionFactory(QThread):
     finish_event = pyqtSignal('PyQt_PyObject', int)
     result_event = pyqtSignal('PyQt_PyObject')
 
-    def __init__(self, runnable_commands):
+    def __init__(self, runnable_commands, logger=None, max_threads=None):
         super().__init__()
         self.runnables = runnable_commands
         self.runnable_count = len(self.runnables)
         self.completed = []
         self.thread_pool = QThreadPool()
         self.stop = False
-        self.start_time = None
+        self.logger = logger
+        if max_threads:
+            self.max_threads = min(max_threads, self.thread_pool.maxThreadCount())
+        else:
+            self.max_threads = self.thread_pool.maxThreadCount()
+
+        self.log(f"Multi-threading with maximum of {self.max_threads} threads")
+
+    def get_max_threads(self):
+        return self.max_threads
+
+    def get_active_thread_count(self):
+        return self.thread_pool.activeThreadCount()
 
     def stop_scan(self):
         self.stop = True
 
     def run(self):
-        self.start_time = datetime.datetime.now()
-        self._start_work()
+        self.do_work()
 
-    def result_received(self, result):
-        self.result_event.emit(result)
+    def thread_complete(self, result):
         self.completed.append(result)
-        self._start_work()
+        self.do_work()
 
     def is_running(self):
         return self.thread_pool.activeThreadCount() > 0
 
-    def _start_work(self):
+    def do_work(self):
         if len(self.runnables) > 0:
             if self.stop:
-                print("Stop has been received. Exiting now!")
+                self.log("Stop has been received. Waiting for threads to finish before exiting...")
                 self.thread_pool.waitForDone()
                 if len(self.completed) == self.runnable_count + len(self.runnables):
-                    end_time = datetime.datetime.now()
-                    self.finish_event.emit(self.completed, (end_time - self.start_time).total_seconds())
+                    self.finish_event.emit(self.completed, sum(self.completed))
                 return
             active_threads = self.thread_pool.activeThreadCount()
-            available_threads = self.thread_pool.maxThreadCount() - active_threads
+            available_threads = self.max_threads - active_threads
             for i in range(0, min(available_threads, len(self.runnables))):
-                print("Dispatching to thread number " + str(i))
+                self.log("Dispatching thread on empty slot...")
                 runnable = self.runnables.pop()
-                runnable.signals.result.connect(self.result_received)
+                runnable.signals.complete.connect(self.thread_complete)
                 runnable.setAutoDelete(True)
                 # Execute
                 self.thread_pool.start(runnable)
         else:
-            self.thread_pool.waitForDone()
+            self.log("Waiting for threads to finish")
             if len(self.completed) == self.runnable_count:
-                end_time = datetime.datetime.now()
-                self.finish_event.emit(self.completed, (end_time - self.start_time).total_seconds())
+                total_time = sum(self.completed)
+                self.log(f"Done. Total work completed in...{total_time}")
+                self.finish_event.emit(self.completed, total_time)
+
+    def log(self, message):
+        if self.logger:
+            self.logger.info(message)
+
