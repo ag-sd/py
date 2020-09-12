@@ -23,6 +23,8 @@ class SettingsKeys(Enum):
     max_threads = "max_threads"
     delete_metadata = "delete_metadata"
     single_thread_video = "single_thread_video"
+    sort_by_size = "sort_by_size"
+    skip_previously_processed = "skip_previously_processed"
 
 
 settings = AppSettings(
@@ -72,6 +74,14 @@ def get_delete_metadata():
     return settings.get_setting(SettingsKeys.delete_metadata, Qt.Unchecked) == Qt.Checked
 
 
+def is_history_enforced():
+    return settings.get_setting(SettingsKeys.skip_previously_processed, Qt.Unchecked) == Qt.Checked
+
+
+def sort_by_size():
+    return settings.get_setting(SettingsKeys.sort_by_size, Qt.Unchecked) == Qt.Checked
+
+
 def save_encode_list(items):
     items_pickle = pickle.dumps(items)
     settings.apply_setting(SettingsKeys.encode_list, items_pickle)
@@ -95,6 +105,7 @@ class TransCodaSettings(QDialog):
         self.delete_metadata = QCheckBox("Delete all tag information in result")
         self.single_thread_video = QCheckBox("Process video in a single thread only")
         self.history = QCheckBox("Skip files if they have been processed before")
+        self.sort_by_size = QCheckBox("Encode the largest files first")
         self.encoder_editor = TransCodaEditor.TransCodaEditor(caption="Available Encoders")
         self.max_threads = QSpinBox()
         self.init_ui()
@@ -108,6 +119,8 @@ class TransCodaSettings(QDialog):
         self._set_checkbox(self.preserve_times, SettingsKeys.preserve_times, self.set_setting)
         self._set_checkbox(self.delete_metadata, SettingsKeys.delete_metadata, self.set_setting)
         self._set_checkbox(self.overwrite_files, SettingsKeys.overwrite_files, self.set_setting)
+        self._set_checkbox(self.history, SettingsKeys.skip_previously_processed, self.set_setting)
+        self._set_checkbox(self.sort_by_size, SettingsKeys.sort_by_size, self.set_setting)
         self._set_checkbox(self.single_thread_video, SettingsKeys.single_thread_video, self.set_setting)
 
         self.encoder_editor.select_encoder(settings.get_setting(SettingsKeys.encoder_path, "NA"))
@@ -126,6 +139,7 @@ class TransCodaSettings(QDialog):
         layout.addWidget(self.delete_metadata)
         layout.addWidget(self.overwrite_files)
         layout.addWidget(self.history)
+        layout.addWidget(self.sort_by_size)
 
         layout.addWidget(QHLine())
         layout.addWidget(self.encoder_editor)

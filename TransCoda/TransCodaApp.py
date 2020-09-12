@@ -258,7 +258,7 @@ class TransCodaApp(QMainWindow):
                     continue
                 # Check History
                 historical_file = self.history.get_execution_details(input_file=file_item)
-                if historical_file:
+                if historical_file and TransCodaSettings.is_history_enforced():
                     TransCoda.logger.info(f"{file_item} has been previously processed. Skipping this file.\n"
                                           f"Execution Details are: {historical_file}")
                     continue
@@ -283,6 +283,9 @@ class TransCodaApp(QMainWindow):
         if len(runnables) <= 0:
             self.statusBar().showMessage("Nothing to encode!")
             return
+
+        if TransCodaSettings.sort_by_size():
+            runnables.sort(key=lambda x: os.stat(x.input_file).st_size)
 
         self.progressbar.setValue(0)
         self.progressbar.setMaximum(len(runnables))
