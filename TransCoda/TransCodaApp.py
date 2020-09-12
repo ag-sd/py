@@ -17,7 +17,7 @@ from TransCoda import MediaMetaData, TransCodaSettings
 from TransCoda.Encoda import EncodaStatus, EncodaCommand
 from TransCoda.MainPanel import MainPanel, OutputDirectoryNotSet, EncoderNotSelected, ItemKeys
 from TransCoda.MediaMetaData import MetaDataFields
-from TransCoda.ProcessRunners import HandbrakeProcessRunner
+from TransCoda.TransCodaHistory import TransCodaHistory
 from TransCoda.TransCodaSettings import SettingsKeys
 
 
@@ -25,6 +25,7 @@ class MetadataRetriever(CommonUtils.Command):
     def __init__(self, input_files, batch_size=15):
         self.files = input_files
         self.batch_size = batch_size
+        self.history = TransCodaHistory()
         super().__init__()
 
     def do_work(self):
@@ -33,6 +34,7 @@ class MetadataRetriever(CommonUtils.Command):
             metadata = MediaMetaData.get_metadata(file)
             if not metadata:
                 continue
+
             item = {
                 ItemKeys.input_file_name: file,
                 ItemKeys.input_bitrate: metadata[MetaDataFields.bit_rate],
@@ -41,8 +43,11 @@ class MetadataRetriever(CommonUtils.Command):
                 ItemKeys.input_file_size: metadata[MetaDataFields.size],
                 ItemKeys.sample_rate: metadata[MetaDataFields.sample_rate],
                 ItemKeys.channels: metadata[MetaDataFields.channels],
-                ItemKeys.status: EncodaStatus.READY
+                ItemKeys.status: EncodaStatus.READY,
             }
+            history = self.history.get_execution_details(file)
+            if history:
+                item[ItemKeys.history] = history
             self.add_element(item, ItemKeys.artist, metadata, MetaDataFields.artist)
             self.add_element(item, ItemKeys.album_artist, metadata, MetaDataFields.album_artist)
             self.add_element(item, ItemKeys.title, metadata, MetaDataFields.title)
@@ -172,6 +177,7 @@ class TransCodaApp(QMainWindow):
         self.terminal_btn = QPushButton()
         self.terminal_view = TerminalView()
         self.executor = None
+        self.history = TransCodaHistory()
         self.init_ui()
 
     def init_ui(self):
@@ -203,18 +209,6 @@ class TransCodaApp(QMainWindow):
         self.show()
         # Executed after the show, where all dimensions are calculated
         self.progressbar.setFixedWidth(self.progressbar.width())
-
-    def do_test(self):
-        command = "HandBrakeCLI -i /mnt/Stuff/testing/video/file_example_MP4_480_1_5MG.mp4 -o /mnt/Stuff/testing/video/file_example_MP4_480_1_5MG_ENC.mp4 -e x264"
-        runnables = [HandbrakeProcessRunner("/mnt/Stuff/testing/video/file_example_MP4_480_1_5MG.mp4", command)]
-        self.progressbar.setValue(0)
-        self.progressbar.setMaximum(len(runnables))
-        self.executor = CommonUtils.CommandExecutionFactory(runnables,
-                                                            logger=TransCoda.logger,
-                                                            max_threads=TransCodaSettings.get_max_threads())
-        self.executor.finish_event.connect(self.jobs_complete_event)
-        self.statusBar().showMessage(f"Dispatching {self.progressbar.maximum()} jobs for encoding")
-        self.executor.start()
 
     def toolbar_event(self, event_name):
         if event_name == "Add File":
@@ -262,6 +256,12 @@ class TransCodaApp(QMainWindow):
             for index, file_item in enumerate(self.main_panel.get_items(item_type=ItemKeys.input_file_name)):
                 if run_indices and not run_indices.__contains__(index):
                     continue
+                # Check History
+                historical_file = self.history.get_execution_details(input_file=file_item)
+                if historical_file:
+                    TransCoda.logger.info(f"{file_item} has been previously processed. Skipping this file.\n"
+                                          f"Execution Details are: {historical_file}")
+                    continue
                 runnable = EncodaCommand(file_item)
                 runnable.signals.result.connect(self.result_received_event)
                 runnable.signals.status.connect(self.status_received_event)
@@ -295,6 +295,19 @@ class TransCodaApp(QMainWindow):
         self.executor.start()
 
     def result_received_event(self, result):
+        for result_item in result:
+            if result_item[ItemKeys.status] in [EncodaStatus.SUCCESS, EncodaStatus.ERROR]:
+                self.history.add_history_item(
+                    input_file=result_item[ItemKeys.input_file_name],
+                    output_file=result_item[ItemKeys.output_file_name],
+                    start_time=result_item[ItemKeys.start_time],
+                    end_time=result_item[ItemKeys.end_time],
+                    input_size=result_item[ItemKeys.input_file_size],
+                    output_size=result_item[ItemKeys.output_file_size],
+                    status=result_item[ItemKeys.status],
+                    encoder=result_item[ItemKeys.encoder_command],
+                    message=result_item[ItemKeys.messages]
+                )
         self.main_panel.update_items(result)
         items = self.main_panel.get_items()
         TransCodaSettings.save_encode_list(items)

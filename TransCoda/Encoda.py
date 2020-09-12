@@ -69,7 +69,7 @@ class EncodaCommand(CommonUtils.Command):
         try:
             output_file = self.get_output_file(encoder)
         except Exception as g:
-            self.emit_exception(start_time, g, None)
+            self.emit_exception(start_time, g, None, None)
             return
 
         input_stat = os.stat(self.input_file)
@@ -87,7 +87,8 @@ class EncodaCommand(CommonUtils.Command):
             runner.status_event.connect(self.status_event)
             runner.message_event.connect(self.log_message)
             runner.run()
-            cpu_time = (datetime.datetime.now() - start_time).total_seconds()
+            end_time = datetime.datetime.now()
+            cpu_time = (end_time - start_time).total_seconds()
             output_stat = os.stat(output_file)
             ratio = 100 - (output_stat.st_size / input_stat.st_size) * 100
             if TransCodaSettings.get_preserve_timestamps():
@@ -95,21 +96,27 @@ class EncodaCommand(CommonUtils.Command):
             self.signals.result.emit(
                 [self.create_result(EncodaStatus.SUCCESS,
                                     f"Time taken {CommonUtils.human_readable_time(cpu_time)}", cpu_time, ratio,
-                                    CommonUtils.human_readable_filesize(output_stat.st_size), output_file)])
+                                    CommonUtils.human_readable_filesize(output_stat.st_size), output_file, start_time,
+                                    end_time, encoder["command"],
+                                    CommonUtils.human_readable_filesize(input_stat.st_size))])
         except Exception as g:
-            self.emit_exception(start_time, g, output_file)
+            self.emit_exception(start_time, g, output_file, encoder["command"])
 
-    def emit_exception(self, start_time, exception, output_file):
-        cpu_time = (datetime.datetime.now() - start_time).total_seconds()
+    def emit_exception(self, start_time, exception, output_file, encoder):
+        end_time = datetime.datetime.now()
+        cpu_time = (end_time - start_time).total_seconds()
         TransCoda.logger.exception(exception)
-        self.signals.result.emit([self.create_result(EncodaStatus.ERROR, str(exception), cpu_time, 0, 0, output_file)])
+        input_stat = os.stat(self.input_file)
+        self.signals.result.emit([self.create_result(EncodaStatus.ERROR, str(exception), cpu_time, 0, 0, output_file,
+                                                     start_time, end_time, encoder,
+                                                     CommonUtils.human_readable_filesize(input_stat.st_size))])
 
     def status_event(self, _file, total, completed):
         from TransCoda.MainPanel import ItemKeys
         self.signals.status.emit(
             {
                 ItemKeys.input_file_name: _file,
-                ItemKeys.percent_compete: f"{(completed/total * 100):.2f}%",
+                ItemKeys.percent_compete: f"{(completed / total * 100):.2f}%",
                 ItemKeys.status: EncodaStatus.IN_PROGRESS
             }
         )
@@ -123,7 +130,8 @@ class EncodaCommand(CommonUtils.Command):
             }
         )
 
-    def create_result(self, status, messages, cpu_time, compression_ratio, op_file_size, output_file):
+    def create_result(self, status, messages, cpu_time, compression_ratio, op_file_size, output_file, start_time,
+                      end_time, encoder_command, input_size):
         from TransCoda.MainPanel import ItemKeys
         response = {
             ItemKeys.input_file_name: self.input_file,
@@ -132,7 +140,11 @@ class EncodaCommand(CommonUtils.Command):
             ItemKeys.messages: messages,
             ItemKeys.cpu_time: cpu_time,
             ItemKeys.compression_ratio: compression_ratio,
-            ItemKeys.output_file_size: op_file_size
+            ItemKeys.output_file_size: op_file_size,
+            ItemKeys.input_file_size: input_size,
+            ItemKeys.start_time: start_time,
+            ItemKeys.end_time: end_time,
+            ItemKeys.encoder_command: encoder_command
         }
         if status == EncodaStatus.SUCCESS:
             response.update({

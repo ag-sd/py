@@ -50,6 +50,9 @@ class ItemKeys(Enum):
     album = "Album", True
     track = "Track", True
     genre = "Genre", True
+    history = "History", False
+    start_time = "Start Time", False
+    end_time = "End Time", False
 
     def __init__(self, display_name, header):
         self.display_name = display_name
@@ -64,7 +67,8 @@ class MainPanel(QTableView):
 
         def __setitem__(self, key, value):
             if key == ItemKeys.input_file_size or key == ItemKeys.output_file_size:
-                value = CommonUtils.human_readable_filesize(value)
+                if not isinstance(value, str):
+                    value = CommonUtils.human_readable_filesize(value)
             elif key == ItemKeys.input_bitrate:
                 value = f"{int(value)/1000:.{0}f} KBit/s"
             elif key == ItemKeys.input_duration or key == ItemKeys.cpu_time:

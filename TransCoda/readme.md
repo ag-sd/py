@@ -24,10 +24,10 @@ Trans:Coda lets you convert media from one format to another
 - [x] Select multiple files
 - [x] Extended columns available
 - [x] Column Sort
-- [ ] Advanced Encoder configuration
-- [ ] Configure Encoders from File
-- [ ] Support any encoder
-- [ ] Add Encoder history to skip files that have previously been encoded
+- [x] Advanced Encoder configuration
+- [x] Configure Encoders from File
+- [x] Support any encoder
+- [x] Add Encoder history to skip files that have previously been encoded
 - [ ] Start Encoding largest/oldest/longest files first 
 - [ ] Profiles
 <del>

@@ -166,19 +166,21 @@ class EncoderSelector(QComboBox):
         match = self._find_encoder(encoder_name)
         if match:
             self._selected_encoder = encoder_name
-            return match[0].data(Qt.UserRole + self._PATH_ROLE), match[0].data(Qt.UserRole + self._DETAILS_ROLE)
-        else:
-            return None, None
+        self.encoder_changed.emit(self._encoder_path(), self._encoder_details())
 
     def _encoder_path(self):
-        match = self._find_encoder(self._selected_encoder)
-        if match:
-            return match[0].data(Qt.UserRole + self._PATH_ROLE)
+        if self._selected_encoder:
+            match = self._find_encoder(self._selected_encoder)
+            if match:
+                return match[0].data(Qt.UserRole + self._PATH_ROLE)
+        return None
 
     def _encoder_details(self):
-        match = self._find_encoder(self._selected_encoder)
-        if match:
-            return match[0].data(Qt.UserRole + self._DETAILS_ROLE)
+        if self._selected_encoder:
+            match = self._find_encoder(self._selected_encoder)
+            if match:
+                return match[0].data(Qt.UserRole + self._DETAILS_ROLE)
+        return None
 
     def _find_encoder(self, encoder_name):
         return self.model().match(self.model().index(0, 0), Qt.UserRole + self._PATH_ROLE, encoder_name, 1,
@@ -288,11 +290,12 @@ class EncoderView(QDialog):
 class TransCodaEditor(QWidget):
     encoder_changed = pyqtSignal('PyQt_PyObject', 'PyQt_PyObject')
 
-    def __init__(self):
+    def __init__(self, caption="Trans:Coda Editor"):
         super().__init__()
         self.encoder = EncoderSelector()
         self.encoder_view = EncoderView()
         self.actions = QToolBar()
+        self.caption = caption
         self.add_action = CommonUtils.create_action(tooltip="Add Encoder", icon=QIcon.fromTheme("list-add"),
                                                     func=self.action_add, name="Add", parent=self)
         self.del_action = CommonUtils.create_action(tooltip="Delete Encoder", icon=QIcon.fromTheme("list-remove"),
@@ -315,7 +318,7 @@ class TransCodaEditor(QWidget):
 
         h_layout = QHBoxLayout()
         h_layout.setContentsMargins(0, 0, 0, 0)
-        h_layout.addWidget(QLabel("Available Encoders"), 1)
+        h_layout.addWidget(QLabel(f"<u>{self.caption}</u>"), 1)
         h_layout.addWidget(self.actions)
         v_layout = QVBoxLayout()
         v_layout.setContentsMargins(0, 0, 0, 0)
