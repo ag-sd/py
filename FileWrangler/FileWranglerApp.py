@@ -8,7 +8,7 @@ from PyQt5.QtCore import Qt, QCoreApplication, QMimeDatabase
 from PyQt5.QtGui import QIcon, QBrush, QColor
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QHBoxLayout, \
     QProgressBar, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QLabel, QProgressDialog, \
-    QLineEdit
+    QLineEdit, QRadioButton, QSpinBox
 
 from CustomUI import FileChooserTextBox, QVLine, DropZone
 from FileWrangler import logger
@@ -91,8 +91,18 @@ class FileWranglerApp(QMainWindow):
         self.progress_bar = QProgressBar()
         self.date_checkbox = QCheckBox("Append Date (YYYY.MM.DD) to destination file")
         self.date_checkbox.stateChanged.connect(self.create_merge)
-        self.key_regex = QLineEdit(_DEFAULT_REGEX)
-        self.key_regex.textChanged.connect(self.create_merge)
+        self.key_token_string = QLineEdit(_DEFAULT_REGEX)
+        self.key_token_string.textChanged.connect(self.create_merge)
+        self.key_separator = QRadioButton("Separator")
+        self.key_separator.released.connect(partial(self.create_merge, ""))
+        self.key_regex = QRadioButton("Regular Expression")
+        self.key_regex.setChecked(True)
+        self.key_regex.released.connect(partial(self.create_merge, ""))
+        self.key_match_counter = QSpinBox()
+        self.key_match_counter.setMinimum(1)
+        self.key_match_counter.setValue(1)
+        self.key_match_counter.setMaximum(10)
+        self.key_match_counter.valueChanged.connect(self.create_merge)
         self.dropZone = DropZone()
         self.dropZone.files_dropped_event.connect(self.create_merge)
         self.table = MainTable()
@@ -108,8 +118,13 @@ class FileWranglerApp(QMainWindow):
         button_layout.addWidget(self.copy_button)
 
         key_layout = QHBoxLayout()
+        key_layout.addWidget(QLabel("Matches in Key: "))
+        key_layout.addWidget(self.key_match_counter)
         key_layout.addWidget(QLabel("Key Identifier"))
+        key_layout.addWidget(self.key_token_string)
         key_layout.addWidget(self.key_regex)
+        key_layout.addWidget(self.key_separator)
+
         control_layout = QVBoxLayout()
         control_layout.addWidget(self.targetDir)
         control_layout.addWidget(self.date_checkbox)
@@ -137,16 +152,22 @@ class FileWranglerApp(QMainWindow):
         self.show()
 
     def create_merge(self, _):
-        try:
-            re.compile(self.key_regex.text())
-        except re.error:
-            logger.error("Regular expression error")
-            return
-
         config = {
             ConfigKeys.append_date: self.date_checkbox.isChecked(),
-            ConfigKeys.key_regex: self.key_regex.text()
+            ConfigKeys.key_token_string: self.key_token_string.text(),
+            ConfigKeys.key_token_count: self.key_match_counter.value(),
         }
+
+        if self.key_regex.isChecked():
+            try:
+                re.compile(self.key_token_string.text())
+                config[ConfigKeys.key_is_regex] = True
+            except re.error:
+                logger.error("Regular expression error")
+                return
+        else:
+            config[ConfigKeys.key_is_regex] = False
+
         model = create_merge_tree(self.dropZone.dropped_files, self.targetDir.getSelection(), config)
         if model:
             self.table.set_model(model)

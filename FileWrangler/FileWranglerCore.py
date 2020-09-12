@@ -5,8 +5,8 @@ from enum import Enum
 
 from CommonUtils import FileScanner
 
-_SPLITTER = " - "
 _UNKNOWN_KEY = "Unknown"
+_DEFAULT_SPLITTER = " - "
 _DEFAULT_REGEX = ".+?(?= - )"
 
 
@@ -17,7 +17,9 @@ class DisplayKeys(Enum):
 
 class ConfigKeys(Enum):
     append_date = 0
-    key_regex = 1
+    key_token_string = 1
+    key_is_regex = 2
+    key_token_count = 4
 
 
 class ActionKeys(Enum):
@@ -92,14 +94,43 @@ def _update_dict(file, _dict, key):
 
 def _create_key(file, config):
     _, file_name = os.path.split(file)
-    tokens = re.search(config[ConfigKeys.key_regex], file_name)
-    if tokens:
-        token = tokens[0]
-        if ConfigKeys.append_date in config and config[ConfigKeys.append_date]:
-            token = f"{token}{_SPLITTER}{datetime.now().strftime('%Y-%m-%d')}"
-        return token
+
+    if config[ConfigKeys.key_is_regex]:
+        tokens = re.findall(config[ConfigKeys.key_token_string], file_name)
+    else:
+        tokens = file_name.split(config[ConfigKeys.key_token_string])
+
+    splitter = _DEFAULT_SPLITTER if config[ConfigKeys.key_is_regex] else config[ConfigKeys.key_token_string]
+
+    if len(tokens) >= config[ConfigKeys.key_token_count]:
+        key_base = splitter.join(tokens[:config[ConfigKeys.key_token_count]])
     else:
         return _UNKNOWN_KEY
+
+    if ConfigKeys.append_date in config:
+        if config[ConfigKeys.append_date]:
+            return f"{key_base}{_DEFAULT_SPLITTER}{datetime.now().strftime('%Y-%m-%d')}"
+        else:
+            return key_base
+    else:
+        return _UNKNOWN_KEY
+
+
+
+
+
+
+
+
+
+
+    # if tokens:
+    #     token = tokens[0]
+    #     if ConfigKeys.append_date in config and config[ConfigKeys.append_date]:
+    #         token = f"{token}{_SPLITTER}{datetime.now().strftime('%Y-%m-%d')}"
+    #     return token
+    # else:
+    #     return _UNKNOWN_KEY
 
 
     # tokens = file_name.split(_SPLITTER)
