@@ -28,7 +28,7 @@ Trans:Coda lets you convert media from one format to another
 - [x] Configure Encoders from File
 - [x] Support any encoder
 - [x] Add Encoder history to skip files that have previously been encoded
-- [ ] Start Encoding largest/oldest/longest files first 
+- [x] Start Encoding largest/oldest/longest files first 
 - [ ] Profiles
 <del>
 - [ ] Extended format support<br>

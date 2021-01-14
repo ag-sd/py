@@ -173,7 +173,7 @@ class MainPanel(QTableView):
 
         def sort(self, col, order=Qt.AscendingOrder):
             self.file_items.sort(
-                key=lambda x: x[self.columnHeaders[col]],
+                key=lambda x: x[self.columnHeaders[col]] if self.columnHeaders[col] in x else "0",
                 reverse=False if order == Qt.AscendingOrder else True)
             self.dataChanged.emit(QModelIndex(), QModelIndex())
 

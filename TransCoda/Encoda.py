@@ -1,5 +1,6 @@
 import datetime
 import os
+import random
 from enum import Enum
 
 from PyQt5.QtGui import QColor, QBrush
@@ -32,9 +33,12 @@ class TranscodaError(Exception):
 
 class EncodaCommand(CommonUtils.Command):
 
+    _TICK_MAX = 10
+
     def __init__(self, input_file):
         super().__init__()
         self.input_file = input_file
+        self.tick = random.randint(1, EncodaCommand._TICK_MAX)
 
     def get_output_file(self, encoder):
         # Ensure the input file exists
@@ -112,6 +116,10 @@ class EncodaCommand(CommonUtils.Command):
                                                      CommonUtils.human_readable_filesize(input_stat.st_size))])
 
     def status_event(self, _file, total, completed):
+        # Throttle the number of events raised
+        if self.tick != 0:
+            self.tick = self.tick - 1
+            return
         from TransCoda.MainPanel import ItemKeys
         self.signals.status.emit(
             {
@@ -120,6 +128,7 @@ class EncodaCommand(CommonUtils.Command):
                 ItemKeys.status: EncodaStatus.IN_PROGRESS
             }
         )
+        self.tick = random.randint(1, EncodaCommand._TICK_MAX)
 
     def log_message(self, _file, time, message):
         self.signals.log_message.emit(
