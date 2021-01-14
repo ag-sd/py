@@ -18,8 +18,14 @@ class DisplayKeys(Enum):
 class ConfigKeys(Enum):
     append_date = 0
     key_token_string = 1
-    key_is_regex = 2
+    key_type = 2
     key_token_count = 4
+
+
+class KeyType(Enum):
+    regular_expression = 1
+    separator = 2
+    replacement = 3
 
 
 class ActionKeys(Enum):
@@ -38,12 +44,6 @@ def create_merge_tree(files, target_directory, config):
     :param target_directory:
     :return:
     """
-    # Find all unique keys in destination dir
-    # for each source file:
-    #   generate key
-    #   if key exists in destination, update destination file count to destination value + 1
-    #   add to list of files to return
-    #
 
     if files is None:
         return
@@ -95,14 +95,19 @@ def _update_dict(file, _dict, key):
 def _create_key(file, config):
     _, file_name = os.path.split(file)
 
-    if config[ConfigKeys.key_is_regex]:
+    if config[ConfigKeys.key_type] == KeyType.regular_expression:
         tokens = re.findall(config[ConfigKeys.key_token_string], file_name)
-    else:
+        splitter = _DEFAULT_SPLITTER
+    elif config[ConfigKeys.key_type] == KeyType.separator:
         tokens = file_name.split(config[ConfigKeys.key_token_string])
+        splitter = config[ConfigKeys.key_token_string]
+    else:
+        tokens = [config[ConfigKeys.key_token_string]]
+        splitter = None
 
-    splitter = _DEFAULT_SPLITTER if config[ConfigKeys.key_is_regex] else config[ConfigKeys.key_token_string]
-
-    if len(tokens) >= config[ConfigKeys.key_token_count]:
+    if config[ConfigKeys.key_type] == KeyType.replacement:
+        key_base = tokens[0]
+    elif len(tokens) >= config[ConfigKeys.key_token_count]:
         key_base = splitter.join(tokens[:config[ConfigKeys.key_token_count]])
     else:
         return _UNKNOWN_KEY
@@ -114,31 +119,3 @@ def _create_key(file, config):
             return key_base
     else:
         return _UNKNOWN_KEY
-
-
-
-
-
-
-
-
-
-
-    # if tokens:
-    #     token = tokens[0]
-    #     if ConfigKeys.append_date in config and config[ConfigKeys.append_date]:
-    #         token = f"{token}{_SPLITTER}{datetime.now().strftime('%Y-%m-%d')}"
-    #     return token
-    # else:
-    #     return _UNKNOWN_KEY
-
-
-    # tokens = file_name.split(_SPLITTER)
-    #
-    # if len(tokens) > 1:
-    #     token = tokens[0]
-    #     if ConfigKeys.append_date in config and config[ConfigKeys.append_date]:
-    #         token = f"{token}{_SPLITTER}{datetime.now().strftime('%Y-%m-%d')}"
-    #     return token
-    # else:
-    #     return _UNKNOWN_KEY

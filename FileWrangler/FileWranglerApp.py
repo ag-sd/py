@@ -8,12 +8,12 @@ from PyQt5.QtCore import Qt, QCoreApplication, QMimeDatabase
 from PyQt5.QtGui import QIcon, QBrush, QColor
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QHBoxLayout, \
     QProgressBar, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QLabel, QProgressDialog, \
-    QLineEdit, QRadioButton, QSpinBox
+    QLineEdit, QRadioButton, QSpinBox, QComboBox
 
 from CustomUI import FileChooserTextBox, QVLine, DropZone
 from FileWrangler import logger
 from FileWrangler.FileWranglerCore import ActionKeys, DisplayKeys, ConfigKeys, create_merge_tree, _UNKNOWN_KEY, \
-    _DEFAULT_REGEX
+    _DEFAULT_REGEX, KeyType
 
 
 class MainTable(QTableWidget):
@@ -91,13 +91,18 @@ class FileWranglerApp(QMainWindow):
         self.progress_bar = QProgressBar()
         self.date_checkbox = QCheckBox("Append Date (YYYY.MM.DD) to destination file")
         self.date_checkbox.stateChanged.connect(self.create_merge)
-        self.key_token_string = QLineEdit(_DEFAULT_REGEX)
-        self.key_token_string.textChanged.connect(self.create_merge)
+        self.key_token_string = QComboBox()
+        self.key_token_string.setEditable(True)
+        self.key_token_string.setInsertPolicy(QComboBox.InsertAtTop)
+        self.key_token_string.setCurrentText(_DEFAULT_REGEX)
+        self.key_token_string.editTextChanged.connect(self.create_merge)
         self.key_separator = QRadioButton("Separator")
         self.key_separator.released.connect(partial(self.create_merge, ""))
         self.key_regex = QRadioButton("Regular Expression")
         self.key_regex.setChecked(True)
         self.key_regex.released.connect(partial(self.create_merge, ""))
+        self.key_replace = QRadioButton("Completely Replace")
+        self.key_replace.released.connect(partial(self.create_merge, ""))
         self.key_match_counter = QSpinBox()
         self.key_match_counter.setMinimum(1)
         self.key_match_counter.setValue(1)
@@ -121,9 +126,10 @@ class FileWranglerApp(QMainWindow):
         key_layout.addWidget(QLabel("Matches in Key: "))
         key_layout.addWidget(self.key_match_counter)
         key_layout.addWidget(QLabel("Key Identifier"))
-        key_layout.addWidget(self.key_token_string)
+        key_layout.addWidget(self.key_token_string, stretch=1)
         key_layout.addWidget(self.key_regex)
         key_layout.addWidget(self.key_separator)
+        key_layout.addWidget(self.key_replace)
 
         control_layout = QVBoxLayout()
         control_layout.addWidget(self.targetDir)
@@ -152,21 +158,27 @@ class FileWranglerApp(QMainWindow):
         self.show()
 
     def create_merge(self, _):
+        token_string = self.key_token_string.currentText()
+        if token_string is None or token_string == "":
+            return
+
         config = {
             ConfigKeys.append_date: self.date_checkbox.isChecked(),
-            ConfigKeys.key_token_string: self.key_token_string.text(),
+            ConfigKeys.key_token_string: self.key_token_string.currentText(),
             ConfigKeys.key_token_count: self.key_match_counter.value(),
         }
 
         if self.key_regex.isChecked():
             try:
-                re.compile(self.key_token_string.text())
-                config[ConfigKeys.key_is_regex] = True
+                re.compile(self.key_token_string.currentText())
+                config[ConfigKeys.key_type] = KeyType.regular_expression
             except re.error:
                 logger.error("Regular expression error")
                 return
+        elif self.key_replace.isChecked():
+            config[ConfigKeys.key_type] = KeyType.replacement
         else:
-            config[ConfigKeys.key_is_regex] = False
+            config[ConfigKeys.key_type] = KeyType.separator
 
         model = create_merge_tree(self.dropZone.dropped_files, self.targetDir.getSelection(), config)
         if model:
@@ -203,6 +215,9 @@ class FileWranglerApp(QMainWindow):
             if transfer_dialog.wasCanceled():
                 logger.info("User aborted operation")
                 break
+        self.key_token_string.blockSignals(True)
+        self.key_token_string.addItem(self.key_token_string.currentText())
+        self.key_token_string.blockSignals(False)
 
 
 def main():
