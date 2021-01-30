@@ -190,16 +190,21 @@ def _save_flac(file, params):
 
 def _save_ogg(file, params):
     tag_data = mutagen.File(file, easy=True)
-    if tag_data.tags is not None:
-        for kvp in sorted(tag_data.tags):
-            key = kvp[0].replace(' ', '').lower()
-            if _param_lookup.__contains__(key):
-                params[key] = kvp[1]
+    params = ogg_tags(tag_data.tags, params)
     params[_param_channels] = tag_data.info.channels
     params[_param_length] = tag_data.info.length
     params[_param_sample_rate] = tag_data.info.sample_rate
     params[_param_bitrate] = tag_data.info.bitrate
     params[_param_encoder_info] = ""
+    return params
+
+
+def ogg_tags(tags, params):
+    if tags is not None:
+        for kvp in sorted(tags):
+            key = kvp[0].replace(' ', '').lower()
+            if _param_lookup.__contains__(key):
+                params[key] = kvp[1]
     return params
 
 

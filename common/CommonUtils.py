@@ -44,6 +44,25 @@ def human_readable_filesize(size, decimal_places=2):
     return f"{size:.{decimal_places}f}{unit}"
 
 
+def from_human_readable_filesize(text):
+    lookup = {
+        "B": 1,
+        "KiB": 1024.0,
+        'MiB': 1024.0 * 1024.0,
+        'GiB': 1024.0 * 1024.0 * 1024.0,
+        'TiB': 1024.0 * 1024.0 * 1024.0 * 1024.0
+    }
+    if type(text) != str:
+        return text
+    key = text[-3:]
+    if key in lookup:
+        return float(text[:-3]) * lookup[key]
+    elif key[-1] in lookup:
+        return float(text[:-1])
+    else:
+        return None
+
+
 def human_readable_time(seconds):
     seconds = int(float(seconds))
     _hrs = 0
