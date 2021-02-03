@@ -41,9 +41,9 @@ Trans:Coda lets you convert media from one format to another
   - https://stackoverflow.com/questions/46508055/using-ffmpeg-to-cut-audio-from-to-position
 - [ ] Download links specified in a playlist.m3u file 
 - [ ] Youtube audio downloader
- - https://stackoverflow.com/questions/40713268/download-youtube-video-using-python-to-a-certain-directory
- - https://github.com/ytdl-org/youtube-dl/blob/master/README.md#readme
-- [ ] Change the encoder on a file
+  - https://stackoverflow.com/questions/40713268/download-youtube-video-using-python-to-a-certain-directory
+  - https://github.com/ytdl-org/youtube-dl/blob/master/README.md#readme
+- [ ] ~~Change the encoder on a file~~
 
 - [ ] Extended format support<br>
   - [x] .aac<br>
