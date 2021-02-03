@@ -3,12 +3,12 @@ from enum import Enum, unique
 from functools import partial
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QCheckBox, QDialogButtonBox, QLabel, QVBoxLayout, QSpinBox, QHBoxLayout
+from PyQt5.QtWidgets import QDialog, QCheckBox, QDialogButtonBox, QLabel, QVBoxLayout, QSpinBox, QHBoxLayout, QLineEdit
 
 import TransCoda
 from CommonUtils import AppSettings, CommandExecutionFactory
 from CustomUI import FileChooserTextBox, QHLine
-from TransCoda import TransCodaEditor
+from TransCoda.ui import TransCodaEditor
 
 
 @unique
@@ -25,6 +25,9 @@ class SettingsKeys(Enum):
     single_thread_video = "single_thread_video"
     sort_by_size = "sort_by_size"
     skip_previously_processed = "skip_previously_processed"
+    columns = "columns"
+    sort_order = "sort_order"
+    copy_extensions = "copy_extensions"
 
 
 settings = AppSettings(
@@ -59,15 +62,15 @@ def get_encoder_name():
 
 
 def get_preserve_dir():
-    return settings.get_setting(SettingsKeys.preserve_dir, Qt.Checked) == Qt.Checked
+    return settings.get_setting(SettingsKeys.preserve_dir, Qt.Unchecked) == Qt.Checked
 
 
 def get_overwrite_if_exists():
-    return settings.get_setting(SettingsKeys.overwrite_files, Qt.Checked) == Qt.Checked
+    return settings.get_setting(SettingsKeys.overwrite_files, Qt.Unchecked) == Qt.Checked
 
 
 def get_preserve_timestamps():
-    return settings.get_setting(SettingsKeys.preserve_times, Qt.Checked) == Qt.Checked
+    return settings.get_setting(SettingsKeys.preserve_times, Qt.Unchecked) == Qt.Checked
 
 
 def get_delete_metadata():
@@ -82,6 +85,14 @@ def sort_by_size():
     return settings.get_setting(SettingsKeys.sort_by_size, Qt.Unchecked) == Qt.Checked
 
 
+def get_copy_extensions():
+    return settings.get_setting(SettingsKeys.copy_extensions, "")
+
+
+def is_single_thread_video():
+    return settings.get_setting(SettingsKeys.single_thread_video, Qt.Unchecked) == Qt.Checked
+
+
 def save_encode_list(items):
     items_pickle = pickle.dumps(items)
     settings.apply_setting(SettingsKeys.encode_list, items_pickle)
@@ -89,6 +100,18 @@ def save_encode_list(items):
 
 def get_encode_list():
     items_pickle = settings.get_setting(SettingsKeys.encode_list)
+    if items_pickle:
+        return pickle.loads(items_pickle)
+    return []
+
+
+def save_columns(columns):
+    items_pickle = pickle.dumps(columns)
+    settings.apply_setting(SettingsKeys.columns, items_pickle)
+
+
+def get_columns():
+    items_pickle = settings.get_setting(SettingsKeys.columns)
     if items_pickle:
         return pickle.loads(items_pickle)
     return []
@@ -108,6 +131,7 @@ class TransCodaSettings(QDialog):
         self.sort_by_size = QCheckBox("Encode the largest files first")
         self.encoder_editor = TransCodaEditor.TransCodaEditor(caption="Available Encoders")
         self.max_threads = QSpinBox()
+        self.unsupported_extensions_to_copy = QLineEdit()
         self.init_ui()
         self.load_settings_and_hooks()
 
@@ -131,6 +155,10 @@ class TransCodaSettings(QDialog):
         self.max_threads.setValue(settings.get_setting(SettingsKeys.max_threads, self.max_threads.maximum()))
         self.max_threads.valueChanged.connect(partial(self.set_setting, SettingsKeys.max_threads))
 
+        self.unsupported_extensions_to_copy.setText(get_copy_extensions())
+        self.unsupported_extensions_to_copy.editingFinished.connect(partial(self.set_setting,
+                                                                            SettingsKeys.copy_extensions))
+
     def init_ui(self):
         layout = QVBoxLayout()
         layout.addWidget(self.output_dir)
@@ -153,6 +181,11 @@ class TransCodaSettings(QDialog):
         layout.addWidget(self.single_thread_video)
 
         layout.addWidget(QHLine())
+        layout.addWidget(QLabel("<u>Unsupported files</u>"))
+        layout.addWidget(QLabel("Copy files with the following extensions to output"))
+        layout.addWidget(self.unsupported_extensions_to_copy)
+
+        layout.addWidget(QHLine())
         buttons = QDialogButtonBox(QDialogButtonBox.Ok, Qt.Horizontal, self)
         buttons.clicked.connect(self.close)
         layout.addWidget(buttons)
@@ -164,8 +197,9 @@ class TransCodaSettings(QDialog):
         set_setting(SettingsKeys.encoder_path, path)
         set_setting(SettingsKeys.encoder_details, encoder)
 
-    @staticmethod
-    def set_setting(setting, value):
+    def set_setting(self, setting, value=None):
+        if setting == SettingsKeys.copy_extensions:
+            value = self.unsupported_extensions_to_copy.text()
         TransCoda.logger.info(f"{setting} -> {value}")
         settings.apply_setting(setting, value)
 

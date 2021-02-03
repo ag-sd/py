@@ -14,7 +14,7 @@ from CustomUI import QHLine
 
 
 def get_config_file():
-    return os.path.join(os.path.dirname(__file__), "resource/encoders.json")
+    return os.path.join(os.path.dirname(__file__), "../resource/encoders.json")
 
 
 def backup_config_file():

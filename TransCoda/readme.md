@@ -20,7 +20,7 @@ Trans:Coda lets you convert media from one format to another
 - [x] Save input file dates on output file
 - [x] Preserve encode list across application restart
 - [x] ~~Mutagen~~ `ffprobe` integration for advanced media information
-- [ ] Configure output directory by tags
+- [ ] Configure output directory by tags ex base_dir/%genre - %album/...
 - [x] Select multiple files
 - [x] Extended columns available
 - [x] Column Sort
@@ -28,15 +28,32 @@ Trans:Coda lets you convert media from one format to another
 - [x] Configure Encoders from File
 - [x] Support any encoder
 - [x] Add Encoder history to skip files that have previously been encoded
-- [x] Start Encoding largest/oldest/longest files first 
+- [x] Start Encoding largest/oldest/longest files first
+- [x] Add Support for keyboard shortcuts
+- [ ] Realtime sorting of data as results change
+- [ ] If media kbps < min of encoder, just copy the file over
+- [x] Copy everything else from the source folder that's not a media file
+  - [x] Add ability to configure this
 - [ ] Profiles
-<del>
+- [ ] Configure option to load metadata  
+- [ ] Split and Encode Cue files: 
+  - https://unix.stackexchange.com/questions/10251/how-do-i-split-a-flac-with-a-cue
+  - https://stackoverflow.com/questions/46508055/using-ffmpeg-to-cut-audio-from-to-position
+- [ ] Download links specified in a playlist.m3u file 
+- [ ] Youtube audio downloader
+ - https://stackoverflow.com/questions/40713268/download-youtube-video-using-python-to-a-certain-directory
+ - https://github.com/ytdl-org/youtube-dl/blob/master/README.md#readme
+- [ ] Change the encoder on a file
+
 - [ ] Extended format support<br>
   - [x] .aac<br>
   - [x] .aiff<br>
   - [x] .amr<br>
   - [x] .opus<br>
   - [x] .ts</del>
+  
+### Known Bugs
+- [ ] Initial size is not formatted correctly
 
 ### Changelog
 **Tuesday May 12 2020 (EDT)** 
