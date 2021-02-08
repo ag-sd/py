@@ -1,4 +1,6 @@
 import datetime
+import os
+import random
 import re
 import shlex
 import shutil
@@ -15,6 +17,15 @@ class ProcessRunner(QObject):
     def __init__(self, **kwargs):
         super().__init__()
         self.__dict__.update(kwargs)
+        self.status_throttle = 0
+
+    def update_status(self, input_file, total, completed):
+        if self.status_throttle == 0:
+            self.status_event.emit(input_file, total, completed)
+            self.status_throttle = random.randint(3, 9)
+        else:
+            self.status_throttle = self.status_throttle - 1
+            print(f"{input_file} counting down to zero {self.status_throttle}")
 
 
 class FileCopyProcessRunner(ProcessRunner):
@@ -23,7 +34,50 @@ class FileCopyProcessRunner(ProcessRunner):
 
     def run(self):
         shutil.copy(src=self.input_file, dst=self.output_file, follow_symlinks=True)
-        self.status_event.emit(self.input_file, 100, 100)
+        self.update_status(self.input_file, 100, 100)
+
+
+class YoutubeDlFfmpegProcessRunner(ProcessRunner):
+    _split_token = "{-}"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if which("youtube-dl") is None:
+            raise EncoderNotFoundException
+        if which("ffmpeg") is None:
+            raise EncoderNotFoundException
+
+    def run(self):
+        commands = self.base_command.split("|")
+        output_file = self._get_file_name()
+        youtube_dl_pipe = f"youtube-dl {self.input_url} " + commands[0].strip()
+        ffmpeg_pipe = commands[1].strip() + f" \"{output_file}\""
+        self.message_event.emit(self.input_file, datetime.datetime.now(), f"yt-dl : {youtube_dl_pipe}")
+        self.message_event.emit(self.input_file, datetime.datetime.now(), f"ffmpeg: {ffmpeg_pipe}")
+
+        p1 = subprocess.Popen(shlex.split(youtube_dl_pipe),
+                              stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE,
+                              universal_newlines=True)
+        subprocess.Popen(shlex.split(ffmpeg_pipe), stdin=p1.stdout)
+
+        for line in p1.stderr:
+            self.message_event.emit(self.input_file, datetime.datetime.now(), line)
+            dur_line = re.search("\\[download].* of.*", line.lower())
+            if dur_line:
+                line = line.replace("[download]", "")
+                tokens = line.split("%")
+                if len(tokens):
+                    self.update_status(self.input_file, 100, float(tokens[0]))
+
+    def _get_file_name(self):
+        file_name_command = f"youtube-dl --get-filename --output-na-placeholder '' " \
+                            f"-o '%(artist)s{self._split_token}%(title)s' {self.input_url}"
+        file_name_hint = subprocess.check_output(shlex.split(file_name_command)).decode("utf-8").strip()
+        file_tokens = file_name_hint.split("{-}")
+        final_tokens = filter(lambda x: x != "", file_tokens)
+        file_name = " - ".join(final_tokens)
+        return f"{os.path.join(self.output_file, file_name)}.mp3"
 
 
 class FFMPEGProcessRunner(ProcessRunner):
@@ -57,7 +111,7 @@ class FFMPEGProcessRunner(ProcessRunner):
                 time = re.search("time=[0-9:]+", line.lower())
                 if time:
                     completed = self.get_seconds(time.group(0)[5:])
-                    self.status_event.emit(self.input_file, total_secs, completed)
+                    self.update_status(self.input_file, total_secs, completed)
 
     @staticmethod
     def get_seconds(string):
@@ -93,9 +147,9 @@ class HandbrakeProcessRunner(ProcessRunner):
             if progress:
                 txt = line.replace("Encoding: task 1 of 1, ", "")
                 tokens = txt.split("%")
-                self.status_event.emit(self.input_file, 100, float(tokens[0]))
+                self.update_status(self.input_file, 100, float(tokens[0]))
             elif line.startswith("Encode done!"):
-                self.status_event.emit(self.input_file, 100, 100)
+                self.update_status(self.input_file, 100, 100)
 
     def generate_command(self):
         return f"HandBrakeCLI"\
@@ -109,5 +163,6 @@ class EncoderNotFoundException(Exception):
 runners_registry = {
     "ffmpeg": FFMPEGProcessRunner,
     "HandBrakeCLI": HandbrakeProcessRunner,
-    "copy": FileCopyProcessRunner
+    "copy": FileCopyProcessRunner,
+    "youtube-dl-ffmpeg": YoutubeDlFfmpegProcessRunner,
 }

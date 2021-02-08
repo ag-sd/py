@@ -86,5 +86,24 @@
                 "command": "-t 1 --angle 1 -c 1 -f mp4  --detelecine -w 640 --crop 0:0:0:0 --loose-anamorphic  --modulus 2 -e x264 -q 22 -r 30 --pfr -a none  --audio-fallback ac3 --markers=\"/tmp/chapter.csv\" --encoder-preset=veryslow  --encoder-tune=\"film\"  --encoder-level=\"3.1\"  --encoder-profile=high  --verbose=1"
             }
         }
+    },
+    "URL": {
+        "Youtube-dl": {
+            "Extract Audio Mp3 High 170 to 210 kBits" : {
+                "extension": "",
+                "executable": "youtube-dl-ffmpeg",
+                "command": "--sleep-interval 5 --max-sleep-interval 15 --add-metadata -o - | ffmpeg -hide_banner -loglevel repeat+verbose -y -i pipe: -codec:a libmp3lame -qscale:a 2"
+            },
+            "Extract Audio Very High 220 to 260 kBits" : {
+                "extension": "",
+                "executable": "youtube-dl-ffmpeg",
+                "command": "--sleep-interval 5 --max-sleep-interval 15 --add-metadata -o - | ffmpeg -hide_banner -loglevel repeat+verbose -y -i pipe: -codec:a libmp3lame -qscale:a 0"
+            },
+            "Extract Video" : {
+                "extension": "",
+                "executable": "youtube-dl",
+                "command": "$url -no-continue -o '$output_dir/%(title)s.f%(format_id)s.%(ext)s' --add-metadata --sleep-interval 5 --max-sleep-interval 15"
+            }
+        }
     }
 }

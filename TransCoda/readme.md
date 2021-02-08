@@ -12,7 +12,7 @@ Trans:Coda lets you convert media from one format to another
 - [x] Change status of files in encode list - (Change back to Ready or mark as complete)
 - [x] Show CPU, Thread ~~and Memory statistics~~
 - [ ] Redirect STDERR to a file
-- [x] Add encoded ratio (Input fs vs Output fs)
+- [x] Add an `encoded ratio` (Input fs vs Output fs)
 - [ ] Run a process after execution
 - [x] Option to wipe out tags after encode
 - [x] Handle output file exists
@@ -20,7 +20,7 @@ Trans:Coda lets you convert media from one format to another
 - [x] Save input file dates on output file
 - [x] Preserve encode list across application restart
 - [x] ~~Mutagen~~ `ffprobe` integration for advanced media information
-- [ ] Configure output directory by tags ex base_dir/%genre - %album/...
+- [ ] Configure output directory by tag's ex base_dir/%genre - %album/...
 - [x] Select multiple files
 - [x] Extended columns available
 - [x] Column Sort
@@ -39,11 +39,13 @@ Trans:Coda lets you convert media from one format to another
 - [ ] Split and Encode Cue files: 
   - https://unix.stackexchange.com/questions/10251/how-do-i-split-a-flac-with-a-cue
   - https://stackoverflow.com/questions/46508055/using-ffmpeg-to-cut-audio-from-to-position
-- [ ] Download links specified in a playlist.m3u file 
-- [ ] Youtube audio downloader
+- [x] Download links specified in a playlist.m3u file 
+- [x] Youtube audio downloader
   - https://stackoverflow.com/questions/40713268/download-youtube-video-using-python-to-a-certain-directory
   - https://github.com/ytdl-org/youtube-dl/blob/master/README.md#readme
 - [ ] ~~Change the encoder on a file~~
+- [ ] Process URL's on a single thread
+- [ ] Pause and resume encoding
 
 - [ ] Extended format support<br>
   - [x] .aac<br>
@@ -56,6 +58,12 @@ Trans:Coda lets you convert media from one format to another
 - [ ] Initial size is not formatted correctly
 
 ### Changelog
+**Sunday Feb 7 2021 (EDT)**
+- Rewrite of core modules to improve scalability and stability
+- Support to download web-urls using youtube-dl
+- Better history recording
+- Checked off a few more feature to-do's 
+
 **Tuesday May 12 2020 (EDT)** 
 - Select multiple files in files window
 - Option to wipe out tags after encode

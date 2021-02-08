@@ -7,11 +7,8 @@ from PyQt5.QtGui import QIcon, QBrush, QColor
 
 import CommonUtils
 import TransCoda
-from TransCoda.ui import TransCodaSettings
-from TransCoda.core import TransCodaHistory
-import MediaMetaData
 from TransCoda.core.Encoda import EncoderStatus
-from MediaMetaData import MetaDataFields
+from TransCoda.ui import TransCodaSettings
 
 
 class StatusColor:
@@ -19,54 +16,6 @@ class StatusColor:
         self.brush = QBrush(QColor(r, g, b, a))
         self.is_background_color = is_background_color
         self.is_foreground_color = not is_background_color
-
-
-class FileMetaDataExtractor(CommonUtils.Command):
-    def __init__(self, input_files, batch_size=15):
-        self.files = input_files
-        self.batch_size = batch_size
-        super().__init__()
-
-    def do_work(self):
-        batch = []
-        for file in self.files:
-            metadata = MediaMetaData.get_metadata(file)
-            item = FileItem(file)
-            if not metadata:
-                item.status = EncoderStatus.UNSUPPORTED
-                item.update_output_file()
-            else:
-                item.status = EncoderStatus.READY
-                item_meta_data = {
-                    Header.input_bitrate: metadata[MetaDataFields.bit_rate],
-                    Header.input_duration: metadata[MetaDataFields.duration],
-                    Header.input_encoder: metadata[MetaDataFields.codec_long_name],
-                    Header.sample_rate: metadata[MetaDataFields.sample_rate],
-                    Header.channels: metadata[MetaDataFields.channels],
-                }
-                self.add_optional_field(item_meta_data, Header.artist, metadata, MetaDataFields.artist)
-                self.add_optional_field(item_meta_data, Header.album_artist, metadata, MetaDataFields.album_artist)
-                self.add_optional_field(item_meta_data, Header.title, metadata, MetaDataFields.title)
-                self.add_optional_field(item_meta_data, Header.album, metadata, MetaDataFields.album)
-                self.add_optional_field(item_meta_data, Header.track, metadata, MetaDataFields.track)
-                self.add_optional_field(item_meta_data, Header.genre, metadata, MetaDataFields.genre)
-                item.add_metadata(item_meta_data)
-
-                history = TransCodaHistory.get_history(file)
-                if history:
-                    item.history_result = history
-
-            batch.append(item)
-            if len(batch) >= self.batch_size:
-                self.signals.result.emit(batch)
-                batch = []
-        if len(batch):
-            self.signals.result.emit(batch)
-
-    @staticmethod
-    def add_optional_field(_dict, item_key, metadata, meta_key):
-        if meta_key in metadata:
-            _dict[item_key] = metadata[meta_key]
 
 
 class DisplayFunctionMapping(Enum):
@@ -129,7 +78,7 @@ class Header(Enum):
 
     def _extract_raw(self, file_item):
         if self == Header.input_file_name:
-            return file_item.file
+            return file_item.display_name()
         elif self == Header.input_file_type:
             return file_item.mime_type_name
         elif self == Header.status:
@@ -167,8 +116,10 @@ class Header(Enum):
 
 
 class FileItem:
-    def __init__(self, file):
+    def __init__(self, file, url=None):
         self.file = file
+        self.file_name = os.path.split(file)[1]
+        self.url = url
         mime_type = _mime_database.mimeTypeForFile(file)
         os_info = os.stat(file)
         self.file_size = os_info.st_size
@@ -198,13 +149,21 @@ class FileItem:
         self.meta_data.update(meta_data)
 
     def is_supported(self):
-        return self.mime_type_name.upper().startswith("AUDIO") or self.mime_type_name.upper().startswith("VIDEO")
+        return self.is_url() or self.is_video() or self.is_audio()
 
     def is_video(self):
         return self.mime_type_name.upper().startswith("VIDEO")
 
-    def is_preprocessing_required(self):
-        pass
+    def is_url(self):
+        return self.url is not None
+
+    def is_audio(self):
+        return self.mime_type_name.upper().startswith("AUDIO")
+
+    def display_name(self):
+        if self.url is None:
+            return self.file
+        return f"{self.file_name} : {self.url}"
 
     def output_dir_changed(self):
         self.output_file_dir = TransCodaSettings.get_output_dir()
@@ -233,20 +192,24 @@ class FileItem:
 
         _, file_path = os.path.splitdrive(self.file)
         file_path, file = os.path.split(file_path)
-        name, extension = os.path.splitext(file)
+        name, _ = os.path.splitext(file)
         output_dir = self.output_file_dir + file_path if TransCodaSettings.get_preserve_dir() else self.output_file_dir
-        if "extension" in self.encoder_props:
-            if self.encoder_props["extension"] == "*" or not self.is_supported():
-                self.output_file = os.path.join(output_dir, name + extension)
-            else:
-                self.output_file = os.path.join(output_dir, name + self.encoder_props["extension"])
+        if self.encoder_props["extension"] == "*" or not self.is_supported():
+            self.output_file = os.path.join(output_dir, file)
+        elif self.encoder_props["extension"] == "":
+            self.output_file = os.path.join(output_dir, name)
+            TransCoda.logger.warn(f"Encoder props do no specify file extension. "
+                                  f"Encoder is expected to create the output file in {self.output_file}")
         else:
-            self.output_file = os.path.join(output_dir, "%(stub)")
-            TransCoda.logger.warn("Encoder props do no specify file extension. "
-                                  "Encoder is expected to create the output file")
+            self.output_file = os.path.join(output_dir, name + self.encoder_props["extension"])
+
+    def file_key(self):
+        if self.url is None:
+            return self.file
+        return f"{self.file} : {self.url}"
 
     def __str__(self):
-        return f"{self.file} : {self.status}"
+        return f"{self.display_name()} : {self.status}"
 
 
 class FileItemModel(QAbstractTableModel):
@@ -283,10 +246,8 @@ class FileItemModel(QAbstractTableModel):
 
         item = self.file_items[index.row()]
         color = get_item_color(item)
-
         if role == Qt.DisplayRole:
             header = self.columnHeaders[index.column()]
-            # value = item.value_from_file_item_key(header)
             value = header.extract_value(item)
             if value is not None:
                 return value
@@ -329,7 +290,7 @@ class FileItemModel(QAbstractTableModel):
     def add_rows(self, files):
         files_to_add = []
         for file in files:
-            if not os.path.isdir(file) and self.find_item(file)[0] is None:
+            if not os.path.isdir(file) and self.find_item(file_item_key=file)[0] is None:
                 files_to_add.append(FileItem(file))
         return self.set_items(files_to_add)
 
@@ -349,14 +310,16 @@ class FileItemModel(QAbstractTableModel):
         return len(items_to_add)
 
     def update_items(self, items_to_update):
-        max_row = -1
         for updated in items_to_update:
-            item, index = self.find_item(updated.file)
-            if item:
+            item, index = self.find_item(updated.file_key())
+            if updated.status == EncoderStatus.REMOVE:
+                self.remove_rows([index])
+            elif item:
                 self.file_items[index] = updated
                 self.refresh_items(index, index)
-                max_row = max(max_row, index)
-        return self.createIndex(max_row, 0)
+                self.createIndex(index, 0)
+            else:
+                self.set_items([updated])
 
     def get_items(self, index=None):
         if index is not None:
@@ -368,9 +331,9 @@ class FileItemModel(QAbstractTableModel):
                 items_copy.append(item.clone())
             return items_copy
 
-    def find_item(self, file_name) -> (FileItem, int):
+    def find_item(self, file_item_key) -> (FileItem, int):
         for index, item in enumerate(self.file_items):
-            if item.file == file_name:
+            if item.file_key() == file_item_key:
                 return item, index
         return None, -1
 

@@ -17,6 +17,7 @@ class EncoderStatus(Enum):
     READING_METADATA = 6
     UNSUPPORTED = 7
     SKIPPED = 8
+    REMOVE = 9
 
     def __str__(self):
         return self.name
@@ -28,16 +29,13 @@ class TranscodaError(Exception):
 
 class EncoderCommand(CommonUtils.Command):
 
-    _TICK_MAX = 0
-
     def __init__(self, file_item):
         super().__init__()
         self.file = file_item
-        self.tick = 0
 
     def do_work(self):
         self.file.encode_start_time = datetime.datetime.now()
-        encoder = TransCodaSettings.get_encoder()
+        encoder = self.file.encoder_props
         try:
             self._check_file()
         except Exception as exception:
@@ -59,10 +57,11 @@ class EncoderCommand(CommonUtils.Command):
                 executable = encoder["executable"]
                 self.file.encode_command = encoder["command"]
                 if executable not in ProcessRunners.runners_registry:
-                    raise TranscodaError(f"Unable to find a process hander for executable {executable}")
+                    raise TranscodaError(f"Unable to find a process handler for executable {executable}")
 
             process_runner = ProcessRunners.runners_registry[executable]
             runner = process_runner(input_file=self.file.file,
+                                    input_url=self.file.url,
                                     output_file=self.file.output_file,
                                     base_command=self.file.encode_command,
                                     delete_metadata=TransCodaSettings.get_delete_metadata())
@@ -113,7 +112,10 @@ class EncoderCommand(CommonUtils.Command):
             raise TranscodaError(f"Output file {self.file.output_file} already exists!")
 
         # Ensure path exists
-        file_path, _ = os.path.split(self.file.output_file)
+        if self.file.encoder_props["extension"] == "":
+            file_path = self.file.output_file
+        else:
+            file_path, _ = os.path.split(self.file.output_file)
         os.makedirs(file_path, exist_ok=True)
 
         # Check History

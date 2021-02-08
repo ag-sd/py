@@ -1,4 +1,3 @@
-import os
 from enum import Enum
 
 from PyQt5.QtCore import pyqtSignal, QSize
@@ -42,11 +41,6 @@ class MainToolBar(QToolBar):
                                                         tooltip="Add an entire directory",
                                                         func=self.raise_event, parent=self,
                                                         icon=QIcon.fromTheme("folder-new"))
-        self.action_add_yt = CommonUtils.create_action(name=Action.ADD_YTD.name, shortcut="Ctrl+Y",
-                                                       tooltip="Add a file with YouTube Links",
-                                                       func=self.raise_event, parent=self,
-                                                       icon=QIcon(os.path.join(os.path.dirname(__file__),
-                                                                               "../resource/youtube.svg")))
         self.action_clear_all = CommonUtils.create_action(name=Action.DEL_ALL.name, shortcut="Delete",
                                                           tooltip="Clear all files",
                                                           func=self.raise_event, parent=self,
@@ -69,7 +63,6 @@ class MainToolBar(QToolBar):
                                                       icon=QIcon.fromTheme("help-about"))
         self.addAction(self.action_add_file)
         self.addAction(self.action_add_dir)
-        self.addAction(self.action_add_yt)
         self.addAction(self.action_clear_all)
         self.addSeparator()
         self.addAction(self.action_settings)
@@ -100,7 +93,6 @@ class MainToolBar(QToolBar):
     def encoding_finished(self, file_count, output_dir, encoder_name):
         self.action_add_file.setEnabled(True)
         self.action_add_dir.setEnabled(True)
-        self.action_add_yt.setEnabled(True)
         self.action_clear_all.setEnabled(True)
         self.action_settings.setEnabled(True)
         self.action_help.setEnabled(True)
@@ -111,7 +103,6 @@ class MainToolBar(QToolBar):
     def encoding_started(self):
         self.action_add_file.setEnabled(False)
         self.action_add_dir.setEnabled(False)
-        self.action_add_yt.setEnabled(False)
         self.action_clear_all.setEnabled(False)
         self.action_settings.setEnabled(False)
         self.action_help.setEnabled(False)

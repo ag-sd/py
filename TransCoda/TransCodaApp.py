@@ -1,21 +1,22 @@
 import os
 import sys
+from datetime import datetime
 
 import psutil
 from PyQt5 import QtCore
 from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QProgressBar, QLabel, QPushButton
+from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QProgressBar, QLabel, QPushButton, QMessageBox
 
 import CommonUtils
 import TransCoda
 from CustomUI import QVLine
 from TransCoda.core import TransCodaHistory
+from TransCoda.core.MetaDataOperations import FileMetaDataExtractor
 from TransCoda.ui import TransCodaSettings
 from TransCoda.core.Encoda import EncoderCommand, EncoderStatus
 from TransCoda.ui.TransCodaSettings import SettingsKeys
 from TransCoda.ui.Actions import MainToolBar, Action
-from TransCoda.ui.File import FileMetaDataExtractor
 from TransCoda.ui.MainPanel import MainPanel
 from TransCoda.ui.TerminalView import TerminalView
 
@@ -98,6 +99,12 @@ class TransCodaApp(QMainWindow):
             self.main_panel.update_item_status(item_indices, EncoderStatus.SUCCESS)
         elif event == Action.CHANGE_STATUS_READY:
             self.main_panel.update_item_status(item_indices, EncoderStatus.READY)
+        elif event == Action.ABOUT:
+            with open(os.path.join(os.path.dirname(__file__), "resource/about.html"), 'r') as file:
+                about_html = file.read()
+            QMessageBox.about(self, TransCoda.__APP_NAME__, about_html.format(APP_NAME=TransCoda.__APP_NAME__,
+                                                                              VERSION=TransCoda.__VERSION__,
+                                                                              YEAR=datetime.now().year))
 
     def files_changed_event(self, is_added, files):
         if is_added:
@@ -170,7 +177,7 @@ class TransCodaApp(QMainWindow):
         for result_item in result:
             if result_item.status in [EncoderStatus.SUCCESS, EncoderStatus.ERROR]:
                 TransCodaHistory.set_history(
-                    input_file=result_item.file,
+                    input_file=result_item.display_name(),
                     output_file=result_item.output_file,
                     start_time=result_item.encode_start_time,
                     end_time=result_item.encode_end_time,
