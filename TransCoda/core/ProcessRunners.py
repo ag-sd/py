@@ -25,7 +25,6 @@ class ProcessRunner(QObject):
             self.status_throttle = random.randint(3, 9)
         else:
             self.status_throttle = self.status_throttle - 1
-            print(f"{input_file} counting down to zero {self.status_throttle}")
 
 
 class FileCopyProcessRunner(ProcessRunner):
@@ -37,19 +36,54 @@ class FileCopyProcessRunner(ProcessRunner):
         self.update_status(self.input_file, 100, 100)
 
 
-class YoutubeDlFfmpegProcessRunner(ProcessRunner):
+class YoutubeDlProcessRunner(ProcessRunner):
     _split_token = "{-}"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.progress = 0
         if which("youtube-dl") is None:
             raise EncoderNotFoundException
+
+    def run(self):
+        command = f"youtube-dl {self.input_url} {self.base_command} \'{self._get_file_name()}\'"
+        self.message_event.emit(self.input_file, datetime.datetime.now(), command)
+        process = subprocess.Popen(
+            shlex.split(command),
+            stdin=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True
+        )
+
+        for line in process.stderr:
+            self.message_event.emit(self.input_file, datetime.datetime.now(), line)
+            self.progress = self.progress + 1
+            if self.progress >= 100:
+                self.progress = 0
+            self.update_status(self.input_file, 100, self.progress)
+
+    def _get_file_name(self):
+        file_name_command = f"youtube-dl --get-filename --output-na-placeholder '' " \
+                            f"-o '%(artist)s{self._split_token}%(title)s.%(ext)s' {self.input_url}"
+        file_name_hint = subprocess.check_output(shlex.split(file_name_command)).decode("utf-8").strip()
+        file_tokens = file_name_hint.split("{-}")
+        final_tokens = filter(lambda x: x != "", file_tokens)
+        file_name = " - ".join(final_tokens)
+        return os.path.join(self.output_file, file_name)
+
+
+class YoutubeDlFfmpegProcessRunner(YoutubeDlProcessRunner):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         if which("ffmpeg") is None:
             raise EncoderNotFoundException
 
     def run(self):
         commands = self.base_command.split("|")
         output_file = self._get_file_name()
+        file, _ = os.path.splitext(output_file)
+        output_file = file + ".mp3"
         youtube_dl_pipe = f"youtube-dl {self.input_url} " + commands[0].strip()
         ffmpeg_pipe = commands[1].strip() + f" \"{output_file}\""
         self.message_event.emit(self.input_file, datetime.datetime.now(), f"yt-dl : {youtube_dl_pipe}")
@@ -69,15 +103,6 @@ class YoutubeDlFfmpegProcessRunner(ProcessRunner):
                 tokens = line.split("%")
                 if len(tokens):
                     self.update_status(self.input_file, 100, float(tokens[0]))
-
-    def _get_file_name(self):
-        file_name_command = f"youtube-dl --get-filename --output-na-placeholder '' " \
-                            f"-o '%(artist)s{self._split_token}%(title)s' {self.input_url}"
-        file_name_hint = subprocess.check_output(shlex.split(file_name_command)).decode("utf-8").strip()
-        file_tokens = file_name_hint.split("{-}")
-        final_tokens = filter(lambda x: x != "", file_tokens)
-        file_name = " - ".join(final_tokens)
-        return f"{os.path.join(self.output_file, file_name)}.mp3"
 
 
 class FFMPEGProcessRunner(ProcessRunner):
@@ -165,4 +190,5 @@ runners_registry = {
     "HandBrakeCLI": HandbrakeProcessRunner,
     "copy": FileCopyProcessRunner,
     "youtube-dl-ffmpeg": YoutubeDlFfmpegProcessRunner,
+    "youtube-dl": YoutubeDlProcessRunner,
 }

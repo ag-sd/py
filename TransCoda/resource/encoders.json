@@ -102,7 +102,7 @@
             "Extract Video" : {
                 "extension": "",
                 "executable": "youtube-dl",
-                "command": "$url -no-continue -o '$output_dir/%(title)s.f%(format_id)s.%(ext)s' --add-metadata --sleep-interval 5 --max-sleep-interval 15"
+                "command": "-no-continue --add-metadata --sleep-interval 5 --max-sleep-interval 15 -o "
             }
         }
     }
