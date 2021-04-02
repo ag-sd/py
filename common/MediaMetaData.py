@@ -1,4 +1,5 @@
 import json
+import mimetypes
 import shlex
 import subprocess
 from enum import Enum
@@ -6,8 +7,10 @@ from shutil import which
 
 _MISSING_DATA = "Not Available"
 # http://www.imagemagick.org/script/identify.php
+# https://www.imagemagick.org/script/identify.php
 # ffprobe -hide_banner -v info -show_streams -show_format file_example_MP4_480_1_5MG.mp4 -of json -of json
-_COMMAND_ARGS = "ffprobe -v error -select_streams a:0 -show_entries " \
+_IMAGE_COMMAND_ARGS = "magick identify -verbose "
+_MEDIA_COMMAND_ARGS = "ffprobe -v error -select_streams a:0 -show_entries " \
                 "'stream=codec_name,codec_long_name,codec_type,channels,channel_layout," \
                 "sample_rate,bits_per_sample,avg_frame_rate : format=bit_rate,duration,format_long_name,size : " \
                 "format_tags : stream_tags' -of json "
@@ -15,27 +18,47 @@ _COMMAND_ARGS = "ffprobe -v error -select_streams a:0 -show_entries " \
 if which("ffprobe") is None:
     raise Exception("This package requires ffprobe which was not found on this system")
 
-
-def _probe(file):
-    cmd = _COMMAND_ARGS + f"\"{file}\""
-    process = subprocess.Popen(
-        shlex.split(cmd),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True
-    )
-    output, _ = process.communicate()
-    return json.loads(output)
+if which("magick") is None:
+    raise Exception("This package requires imagemagick which was not found on this system")
 
 
 def get_metadata(file):
-    metadata = _probe(file)
-    if metadata:
-        return _get_metadata(metadata)
-    return None
+    mime_type = mimetypes.guess_type(file)[0].upper()
+    if mime_type.startswith("IMAGE"):
+        return _get_image_metadata(_execute(_IMAGE_COMMAND_ARGS + f"\"{file}\""))
+    elif mime_type.startswith("AUDIO") or mime_type.startswith("VIDEO"):
+        metadata = _execute(_MEDIA_COMMAND_ARGS + f"\"{file}\"")
+        if metadata:
+            return _get_media_metadata(json.loads(metadata))
+    else:
+        return None
 
 
-def _get_metadata(metadata):
+def _get_image_metadata(metadata):
+    params = {}
+    for line in metadata.split("\n"):
+        line = line.strip()
+        for metadata_field in MetaDataFields:
+            if metadata_field.magick_key and line.startswith(metadata_field.magick_key):
+                value = line.split(metadata_field.magick_key)[1].strip()
+                if metadata_field == MetaDataFields.exif_tags:
+                    key, exif_value = value.split(":", 1)
+                    if metadata_field in params:
+                        params[metadata_field][key.strip()] = exif_value.strip()
+                    else:
+                        params[metadata_field] = {key.strip(): exif_value.strip()}
+                else:
+                    params[metadata_field] = line.split(metadata_field.magick_key)[1].strip()
+    return params
+
+
+def _get_media_metadata(metadata):
+    def _merge_fields(source, dest, fields):
+        for field in fields:
+            if field.name in source:
+                dest[field] = source[field.name]
+        return dest
+
     params = {}
     if "streams" in metadata:
         if len(metadata["streams"]) > 0:
@@ -53,18 +76,22 @@ def _get_metadata(metadata):
     return params
 
 
-def _merge_fields(source, dest, fields):
-    for field in fields:
-        if field.name in source:
-            dest[field] = source[field.name]
-    return dest
+def _execute(command):
+    process = subprocess.Popen(
+        shlex.split(command),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True
+    )
+    output, _ = process.communicate()
+    return output
 
 
 class MetaDataFields(Enum):
     __lookup__ = {}
 
-    codec_name = "codec_name", "streams"
-    codec_long_name = "codec_long_name", "streams"
+    codec_name = "codec_name", "streams", "Format:"
+    codec_long_name = "codec_long_name", "streams", "Format:"
     codec_type = "codec_type", "streams"
     sample_rate = "sample_rate", "streams"
     channels = "channels", "streams"
@@ -74,7 +101,7 @@ class MetaDataFields(Enum):
     bit_rate = "bit_rate", "format"
     duration = "duration", "format"
     format_long_name = "format_long_name", "format"
-    size = "size", "format"
+    size = "size", "format", "Filesize"
     album_artist = "album_artist", "tags"
     title = "title", "tags"
     artist = "artist", "tags"
@@ -83,13 +110,26 @@ class MetaDataFields(Enum):
     genre = "genre", "tags"
     comment = "comment", "tags"
     date = "date", "tags"
-    creation_time = "creation_time", "tags"
+    creation_time = "creation_time", "tags", "date:create:"
+    modification_time = "modification_time", None, "date:modify:"
+    exif_tags = "exif_tags", None, "exif:"
+    color_depth = "color_depth", None, "Depth:"
+    geometry = "geometry", None, "Geometry:"
+    units = "units", None, "Units:"
+    colorspace = "colorspace", None, "Colorspace:"
+    type = "type", None, "Type:"
+    compression = "compression", None, "Compression:"
+    quality = "quality", None, "Quality:"
+    signature = "signature", None, "signature:"
+    filesize = "filesize", None, "Filesize:"
+    number_pixels = "number_pixels", None, "Number pixels:"
 
-    def __init__(self, _, field_type=None):
+    def __init__(self, _, field_type=None, magick_key=None):
         if field_type:
             if field_type not in self.__class__.__lookup__:
                 self.__class__.__lookup__[field_type] = []
             self.__class__.__lookup__[field_type].append(self)
+        self.magick_key = magick_key
 
     def __str__(self):
         return self.name
@@ -103,22 +143,3 @@ if __name__ == '__main__':
         print("dispatching " + _file)
         meta = get_metadata(_file)
         print(meta)
-
-
-class FFPROBEMetadataFetch(object):
-
-    def __init__(self):
-        super().__init__()
-        self._command_args = "ffprobe -hide_banner -v info -show_format -show_streams -of json "
-
-    def get_metadata(self, file):
-        cmd = self._command_args + f"\"{file}\""
-        process = subprocess.Popen(
-            shlex.split(cmd),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            universal_newlines=True
-        )
-        output, stderr = process.communicate()
-
-        return json.loads(output)

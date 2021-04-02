@@ -2,11 +2,10 @@ import datetime
 import hashlib
 import logging
 import os
-import subprocess
 from functools import partial
 from os import path
 
-from PyQt5.QtCore import QObject, pyqtSignal, QSettings, QThread, QThreadPool, QRunnable
+from PyQt5.QtCore import QObject, pyqtSignal, QSettings, QThread, QThreadPool, QRunnable, QTimer
 from PyQt5.QtWidgets import QCheckBox, QRadioButton, QGroupBox, QWidget, QSplitter, QAction
 
 from common.CustomUI import FileChooserTextBox
@@ -97,6 +96,23 @@ def create_action(parent, name, func, shortcut=None, tooltip=None, icon=None, ch
         action.setCheckable(True)
         action.setChecked(checked)
     return action
+
+
+class PausableTimer(QTimer):
+    def __init__(self):
+        super().__init__()
+        self._is_paused = False
+
+    def pause(self):
+        self.stop()
+        self._is_paused = True
+
+    def resume(self):
+        self.start()
+        self._is_paused = False
+
+    def isPaused(self):
+        return self._is_paused
 
 
 class AppSettings(QObject):
@@ -336,8 +352,8 @@ class CommandExecutionFactory(QThread):
 
     def __init__(self, runnable_commands, logger=None, max_threads=None):
         super().__init__()
-        self.runnables = runnable_commands
-        self.runnable_count = len(self.runnables)
+        self.pending_jobs = runnable_commands
+        self.total_jobs = len(self.pending_jobs)
         self.completed = []
         self.thread_pool = QThreadPool()
         self.stop = False
@@ -369,25 +385,27 @@ class CommandExecutionFactory(QThread):
         return self.thread_pool.activeThreadCount() > 0
 
     def do_work(self):
-        if len(self.runnables) > 0:
+        if len(self.pending_jobs) > 0:
             if self.stop:
                 self.log("Stop has been received. Waiting for threads to finish before exiting...")
                 self.thread_pool.waitForDone()
-                if len(self.completed) == self.runnable_count + len(self.runnables):
+                self.log(f"Waiting for {self.total_jobs - len(self.pending_jobs) - len(self.completed)} "
+                         f"threads to finish")
+                if (self.total_jobs - len(self.pending_jobs) - len(self.completed)) == 0:
                     self.finish_event.emit(self.completed, sum(self.completed))
                 return
             active_threads = self.thread_pool.activeThreadCount()
             available_threads = self.max_threads - active_threads
-            for i in range(0, min(available_threads, len(self.runnables))):
+            for i in range(0, min(available_threads, len(self.pending_jobs))):
                 self.log("Dispatching thread on empty slot...")
-                runnable = self.runnables.pop()
+                runnable = self.pending_jobs.pop()
                 runnable.signals.complete.connect(self.thread_complete)
                 runnable.setAutoDelete(True)
                 # Execute
                 self.thread_pool.start(runnable)
         else:
             self.log("Waiting for threads to finish")
-            if len(self.completed) == self.runnable_count:
+            if len(self.completed) == self.total_jobs:
                 total_time = sum(self.completed)
                 self.log(f"Done. Total work completed in...{total_time}")
                 self.finish_event.emit(self.completed, total_time)
