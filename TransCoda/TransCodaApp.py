@@ -112,10 +112,13 @@ class TransCodaApp(QMainWindow):
             # Add files first
             total_added = self.main_panel.add_files(scanner.files)
             # Fetch and enrich with metadata
-            retriever = FileMetaDataExtractor(scanner.files)
-            retriever.signals.result.connect(self.result_received_event)
+            batches = []
+            for batch in CommonUtils.batch(list(scanner.files), batch_size=20):
+                retriever = FileMetaDataExtractor(batch, batch_size=len(batch))
+                retriever.signals.result.connect(self.result_received_event)
+                batches.append(retriever)
             # UX
-            self.begin_tasks([retriever], f"Fetching meta-data for {total_added} files")
+            self.begin_tasks(batches, f"Fetching meta-data for {total_added} files", total_added)
         self.tool_bar.set_encode_state(file_count=self.main_panel.row_count(),
                                        encoder_name=TransCodaSettings.get_encoder_name(),
                                        output_dir=TransCodaSettings.get_output_dir())
@@ -151,16 +154,17 @@ class TransCodaApp(QMainWindow):
             runnables.sort(key=lambda x: x.file.file_size)
         self.tool_bar.encoding_started()
         if is_video and TransCodaSettings.is_single_thread_video():
-            self.begin_tasks(runnables, f"Dispatching {len(runnables)} jobs for serial encoding", threads=1)
+            self.begin_tasks(runnables, f"Dispatching {len(runnables)} jobs for serial encoding", len(runnables),
+                             threads=1)
         else:
-            self.begin_tasks(runnables, f"Dispatching {len(runnables)} jobs for encoding",
+            self.begin_tasks(runnables, f"Dispatching {len(runnables)} jobs for encoding", len(runnables),
                              threads=TransCodaSettings.get_max_threads())
 
-    def begin_tasks(self, tasks, status_message, threads=TransCodaSettings.get_max_threads()):
+    def begin_tasks(self, tasks, status_message, total_size, threads=TransCodaSettings.get_max_threads()):
         TransCoda.logger.info(status_message)
         self.progressbar.setVisible(True)
         self.progressbar.setValue(0)
-        self.progressbar.setMaximum(len(tasks))
+        self.progressbar.setMaximum(total_size)
         self.executor = CommonUtils.CommandExecutionFactory(tasks,
                                                             logger=TransCoda.logger,
                                                             max_threads=threads)

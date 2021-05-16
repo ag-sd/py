@@ -384,7 +384,7 @@ class FileItemModel(QAbstractTableModel):
 
 
 _status_color_map = {
-    EncoderStatus.READY: StatusColor(176, 224, 230, 0, True),
+    EncoderStatus.READY: StatusColor(255, 255, 255, 0, True),
     EncoderStatus.WAITING: StatusColor(255, 140, 0, 50, True),
     EncoderStatus.SUCCESS: StatusColor(152, 251, 152, 75, True),
     EncoderStatus.ERROR: StatusColor(220, 20, 60, 75, True),

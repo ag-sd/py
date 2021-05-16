@@ -182,7 +182,7 @@ class TransCodaSettings(QDialog):
 
         layout.addWidget(QHLine())
         layout.addWidget(QLabel("<u>Unsupported files</u>"))
-        layout.addWidget(QLabel("Copy files with the following extensions to output"))
+        layout.addWidget(QLabel("Copy files with the following extensions to output\n(Separate with ;)"))
         layout.addWidget(self.unsupported_extensions_to_copy)
 
         layout.addWidget(QHLine())

@@ -16,18 +16,23 @@ class FileMetaDataExtractor(CommonUtils.Command):
         self.batch_size = batch_size
         super().__init__()
 
+    def work_size(self):
+        return self.batch_size
+
     def do_work(self):
         batch = []
         for item in self.files:
             if item.url is not None:
                 item.status = EncoderStatus.READY
-            elif item.status != EncoderStatus.REMOVE:
+            elif item.status != EncoderStatus.REMOVE and item.is_supported():
                 metadata = MediaMetaData.get_metadata(item.file)
                 if not metadata:
                     item.status = EncoderStatus.UNSUPPORTED
                     item.update_output_file()
                 else:
                     item.status = EncoderStatus.READY
+                    if MetaDataFields.bit_rate not in metadata:
+                        print("WHY!!!")
                     item_meta_data = {
                         Header.input_bitrate: metadata[MetaDataFields.bit_rate],
                         Header.input_duration: metadata[MetaDataFields.duration],

@@ -33,6 +33,9 @@ class EncoderCommand(CommonUtils.Command):
         super().__init__()
         self.file = file_item
 
+    def work_size(self):
+        return 1
+
     def do_work(self):
         self.file.encode_start_time = datetime.datetime.now()
         encoder = self.file.encoder_props
