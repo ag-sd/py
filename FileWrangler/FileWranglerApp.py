@@ -93,6 +93,8 @@ class FileWranglerApp(QMainWindow):
         self.sort_name = QRadioButton("Name")
         self.sort_name.setChecked(True)
         self.sort_date = QRadioButton("Date")
+        self.sort_size = QRadioButton("Size")
+        self.sort_none = QRadioButton("None")
         self.key_token_string = QComboBox()
         self.key_token_string.setEditable(True)
         self.key_token_string.setInsertPolicy(QComboBox.InsertAtTop)
@@ -117,6 +119,8 @@ class FileWranglerApp(QMainWindow):
         self.targetDir.file_selection_changed.connect(self.create_merge)
         self.sort_date.released.connect(partial(self.create_merge))
         self.sort_name.released.connect(partial(self.create_merge))
+        self.sort_size.released.connect(partial(self.create_merge))
+        self.sort_none.released.connect(partial(self.create_merge))
         self.table = MainTable()
         self.init_ui()
 
@@ -126,6 +130,8 @@ class FileWranglerApp(QMainWindow):
             dropzone_sort_layout.addWidget(QLabel("Order By"))
             dropzone_sort_layout.addWidget(self.sort_name)
             dropzone_sort_layout.addWidget(self.sort_date)
+            dropzone_sort_layout.addWidget(self.sort_size)
+            dropzone_sort_layout.addWidget(self.sort_none)
             dropzone_layout = QVBoxLayout()
             dropzone_layout.addWidget(self.dropZone)
             dropzone_layout.addLayout(dropzone_sort_layout)
@@ -188,11 +194,19 @@ class FileWranglerApp(QMainWindow):
         if token_string is None or token_string == "":
             return
 
+        sort_key = SortBy.none
+        if self.sort_size.isChecked():
+            sort_key = SortBy.size
+        elif self.sort_name.isChecked():
+            sort_key = SortBy.name
+        elif self.sort_date.isChecked():
+            sort_key = SortBy.date
+
         config = {
             ConfigKeys.append_date: self.date_checkbox.isChecked(),
             ConfigKeys.key_token_string: self.key_token_string.currentText(),
             ConfigKeys.key_token_count: self.key_match_counter.value(),
-            ConfigKeys.sort_by: SortBy.date if self.sort_date.isChecked() else SortBy.name
+            ConfigKeys.sort_by: sort_key
         }
 
         if self.key_regex.isChecked():

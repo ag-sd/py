@@ -26,6 +26,8 @@ class ConfigKeys(Enum):
 class SortBy(Enum):
     name = 1
     date = 2
+    size = 3
+    none = 4
 
 
 class KeyType(Enum):
@@ -96,12 +98,14 @@ def _sort_files(files, config):
     tuples = []
     for file in files:
         os_info = os.stat(file)
-        tuples.append((file, os_info.st_ctime))
+        tuples.append((file, os_info.st_ctime, os_info.st_size))
 
     if config[ConfigKeys.sort_by] == SortBy.name:
         tuples.sort(key=natural_keys)
-    else:
+    elif config[ConfigKeys.sort_by] == SortBy.date:
         tuples.sort(key=lambda t: t[1])
+    elif config[ConfigKeys.sort_by] == SortBy.size:
+        tuples.sort(key=lambda t: t[2])
 
     for _tuple in tuples:
         yield _tuple[0]
