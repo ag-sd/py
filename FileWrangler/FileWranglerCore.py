@@ -20,6 +20,12 @@ class ConfigKeys(Enum):
     key_token_string = 1
     key_type = 2
     key_token_count = 4
+    sort_by = 5
+
+
+class SortBy(Enum):
+    name = 1
+    date = 2
 
 
 class KeyType(Enum):
@@ -62,7 +68,7 @@ def create_merge_tree(files, target_directory, config):
     source_scanner = FileScanner(files, recurse=True, is_qfiles=True)
 
     # For each source file:
-    for file in source_scanner.files:
+    for file in _sort_files(source_scanner.files, config):
         # Update reference dict for file
         key = _create_key(file, config)
         _update_dict(file, reference_keys, key)
@@ -73,6 +79,32 @@ def create_merge_tree(files, target_directory, config):
             DisplayKeys.target: os.path.join(target_directory, f"{key} - {len(reference_keys[key])}{ext}")
         })
     return file_model
+
+
+def _sort_files(files, config):
+    def atoi(text):
+        return int(text) if text.isdigit() else text
+
+    def natural_keys(_tuple):
+        """
+        alist.sort(key=natural_keys) sorts in human order
+        https://nedbatchelder.com/blog/200712/human_sorting.html
+        """
+        return [atoi(c) for c in re.split(r'(\d+)', _tuple[0])]
+
+    # create a tuple of file and creation time
+    tuples = []
+    for file in files:
+        os_info = os.stat(file)
+        tuples.append((file, os_info.st_ctime))
+
+    if config[ConfigKeys.sort_by] == SortBy.name:
+        tuples.sort(key=natural_keys)
+    else:
+        tuples.sort(key=lambda t: t[1])
+
+    for _tuple in tuples:
+        yield _tuple[0]
 
 
 def _create_destination_keymap(files, config):

@@ -8,12 +8,12 @@ from PyQt5.QtCore import Qt, QCoreApplication, QMimeDatabase
 from PyQt5.QtGui import QIcon, QBrush, QColor
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QHBoxLayout, \
     QProgressBar, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QLabel, QProgressDialog, \
-    QLineEdit, QRadioButton, QSpinBox, QComboBox
+    QRadioButton, QSpinBox, QComboBox, QGroupBox
 
 from CustomUI import FileChooserTextBox, QVLine, DropZone
 from FileWrangler import logger
 from FileWrangler.FileWranglerCore import ActionKeys, DisplayKeys, ConfigKeys, create_merge_tree, _UNKNOWN_KEY, \
-    _DEFAULT_REGEX, KeyType
+    _DEFAULT_REGEX, KeyType, SortBy
 
 
 class MainTable(QTableWidget):
@@ -83,65 +83,91 @@ class FileWranglerApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.targetDir = FileChooserTextBox("Destination: ", "Select destination directory", True)
-        self.targetDir.file_selection_changed.connect(self.create_merge)
+
         self.move_button = QPushButton(ActionKeys.move.value)
         self.move_button.pressed.connect(partial(self.execute_merge, ActionKeys.move.value))
         self.copy_button = QPushButton(ActionKeys.copy.value)
         self.copy_button.pressed.connect(partial(self.execute_merge, ActionKeys.copy.value))
         self.progress_bar = QProgressBar()
         self.date_checkbox = QCheckBox("Append Date (YYYY.MM.DD) to destination file")
-        self.date_checkbox.stateChanged.connect(self.create_merge)
+        self.sort_name = QRadioButton("Name")
+        self.sort_name.setChecked(True)
+        self.sort_date = QRadioButton("Date")
         self.key_token_string = QComboBox()
         self.key_token_string.setEditable(True)
         self.key_token_string.setInsertPolicy(QComboBox.InsertAtTop)
         self.key_token_string.setCurrentText(_DEFAULT_REGEX)
-        self.key_token_string.editTextChanged.connect(self.create_merge)
         self.key_separator = QRadioButton("Separator")
-        self.key_separator.released.connect(partial(self.create_merge, ""))
         self.key_regex = QRadioButton("Regular Expression")
         self.key_regex.setChecked(True)
-        self.key_regex.released.connect(partial(self.create_merge, ""))
         self.key_replace = QRadioButton("Completely Replace")
-        self.key_replace.released.connect(partial(self.create_merge, ""))
         self.key_match_counter = QSpinBox()
         self.key_match_counter.setMinimum(1)
         self.key_match_counter.setValue(1)
         self.key_match_counter.setMaximum(10)
-        self.key_match_counter.valueChanged.connect(self.create_merge)
         self.dropZone = DropZone()
+
+        self.key_match_counter.valueChanged.connect(self.create_merge)
         self.dropZone.files_dropped_event.connect(self.create_merge)
+        self.key_token_string.editTextChanged.connect(self.create_merge)
+        self.key_regex.released.connect(partial(self.create_merge))
+        self.key_replace.released.connect(partial(self.create_merge))
+        self.key_separator.released.connect(partial(self.create_merge))
+        self.date_checkbox.stateChanged.connect(self.create_merge)
+        self.targetDir.file_selection_changed.connect(self.create_merge)
+        self.sort_date.released.connect(partial(self.create_merge))
+        self.sort_name.released.connect(partial(self.create_merge))
         self.table = MainTable()
         self.init_ui()
 
     def init_ui(self):
-        self.move_button.setIcon(QIcon.fromTheme("edit-paste"))
-        self.copy_button.setIcon(QIcon.fromTheme("edit-copy"))
+        def create_dropzone_groupbox():
+            dropzone_sort_layout = QHBoxLayout()
+            dropzone_sort_layout.addWidget(QLabel("Order By"))
+            dropzone_sort_layout.addWidget(self.sort_name)
+            dropzone_sort_layout.addWidget(self.sort_date)
+            dropzone_layout = QVBoxLayout()
+            dropzone_layout.addWidget(self.dropZone)
+            dropzone_layout.addLayout(dropzone_sort_layout)
+            dropzone_layout.setContentsMargins(0, 0, 0, 0)
 
-        button_layout = QHBoxLayout()
-        button_layout.addWidget(QLabel(""), stretch=1)
-        button_layout.addWidget(self.move_button)
-        button_layout.addWidget(self.copy_button)
+            groupbox = QGroupBox()
+            groupbox.setLayout(dropzone_layout)
+            return groupbox
 
-        key_layout = QHBoxLayout()
-        key_layout.addWidget(QLabel("Matches in Key: "))
-        key_layout.addWidget(self.key_match_counter)
-        key_layout.addWidget(QLabel("Key Identifier"))
-        key_layout.addWidget(self.key_token_string, stretch=1)
-        key_layout.addWidget(self.key_regex)
-        key_layout.addWidget(self.key_separator)
-        key_layout.addWidget(self.key_replace)
+        def create_rename_controlbox():
+            self.move_button.setIcon(QIcon.fromTheme("edit-paste"))
+            self.copy_button.setIcon(QIcon.fromTheme("edit-copy"))
 
-        control_layout = QVBoxLayout()
-        control_layout.addWidget(self.targetDir)
-        control_layout.addWidget(self.date_checkbox)
-        control_layout.addLayout(key_layout)
-        control_layout.addWidget(QLabel(""))
-        control_layout.addLayout(button_layout)
+            button_layout = QHBoxLayout()
+            button_layout.addWidget(QLabel(""), stretch=1)
+            button_layout.addWidget(self.move_button)
+            button_layout.addWidget(self.copy_button)
+
+            key_layout = QHBoxLayout()
+            key_layout.addWidget(QLabel("Match Key:   "))
+            key_layout.addWidget(self.key_match_counter)
+            key_layout.addWidget(QLabel("Key Identifier"))
+            key_layout.addWidget(self.key_token_string, stretch=1)
+            key_layout.addWidget(self.key_regex)
+            key_layout.addWidget(self.key_separator)
+            key_layout.addWidget(self.key_replace)
+
+            control_layout = QVBoxLayout()
+            control_layout.addWidget(self.targetDir)
+            control_layout.addLayout(key_layout)
+            control_layout.addWidget(self.date_checkbox)
+            # control_layout.addWidget(QLabel(""))
+            control_layout.addLayout(button_layout)
+
+            groupbox = QGroupBox()
+            groupbox.setLayout(control_layout)
+            return groupbox
 
         top_layout = QHBoxLayout()
-        top_layout.addWidget(self.dropZone)
+        top_layout.addWidget(create_dropzone_groupbox())
         top_layout.addWidget(QVLine())
-        top_layout.addLayout(control_layout)
+        top_layout.addWidget(create_rename_controlbox())
 
         main_layout = QVBoxLayout()
         main_layout.addLayout(top_layout)
@@ -157,7 +183,7 @@ class FileWranglerApp(QMainWindow):
         self.setMinimumHeight(768)
         self.show()
 
-    def create_merge(self, _):
+    def create_merge(self):
         token_string = self.key_token_string.currentText()
         if token_string is None or token_string == "":
             return
@@ -166,6 +192,7 @@ class FileWranglerApp(QMainWindow):
             ConfigKeys.append_date: self.date_checkbox.isChecked(),
             ConfigKeys.key_token_string: self.key_token_string.currentText(),
             ConfigKeys.key_token_count: self.key_match_counter.value(),
+            ConfigKeys.sort_by: SortBy.date if self.sort_date.isChecked() else SortBy.name
         }
 
         if self.key_regex.isChecked():
@@ -222,6 +249,7 @@ class FileWranglerApp(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
+    # app.setStyleSheet("QGroupBox {  border: 1px solid gray;}")
     ex = FileWranglerApp()
     sys.exit(app.exec_())
 
