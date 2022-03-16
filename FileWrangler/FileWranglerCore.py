@@ -21,6 +21,7 @@ class ConfigKeys(Enum):
     key_type = 2
     key_token_count = 4
     sort_by = 5
+    dir_include = 6
 
 
 class SortBy(Enum):
@@ -46,7 +47,7 @@ def create_merge_tree(files, target_directory, config):
     Create keys for the files.
     Then find files matching those keys in the target_directory
     For each matching key, determine point of insertion of new file
-    
+
     :param config: Key generation config
     :param files:
     :param target_directory:
@@ -114,9 +115,13 @@ def _sort_files(files, config):
 def _create_destination_keymap(files, config):
     _dict = {}
     for file in files:
+        if file == "":
+            continue
         key = _create_key(file, config)
         _, file_name = os.path.split(file)
-        if file_name.startswith(key):
+        dir_prefix = _create_dir_prefix(file, config)
+        with_dir_prefix = f"{file_name}{dir_prefix}"
+        if with_dir_prefix.startswith(key):
             _update_dict(file, _dict, key)
     return _dict
 
@@ -130,6 +135,7 @@ def _update_dict(file, _dict, key):
 
 def _create_key(file, config):
     _, file_name = os.path.split(file)
+    dir_prefix = _create_dir_prefix(file, config)
 
     if config[ConfigKeys.key_type] == KeyType.regular_expression:
         tokens = re.findall(config[ConfigKeys.key_token_string], file_name)
@@ -150,8 +156,18 @@ def _create_key(file, config):
 
     if ConfigKeys.append_date in config:
         if config[ConfigKeys.append_date]:
-            return f"{key_base}{_DEFAULT_SPLITTER}{datetime.now().strftime('%Y-%m-%d')}"
+            return f"{key_base}{dir_prefix}{_DEFAULT_SPLITTER}{datetime.now().strftime('%Y-%m-%d')}"
         else:
-            return key_base
+            return f"{key_base}{dir_prefix}"
     else:
         return _UNKNOWN_KEY
+
+
+def _create_dir_prefix(file, config):
+    if config[ConfigKeys.dir_include] == 0:
+        return ""
+
+    path, _ = os.path.split(file)
+    norm_path = os.path.normpath(path)
+    path_keys = norm_path.split(os.sep)[-config[ConfigKeys.dir_include]:]
+    return f"{_DEFAULT_SPLITTER}{_DEFAULT_SPLITTER.join(path_keys)}"

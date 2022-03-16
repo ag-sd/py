@@ -90,6 +90,10 @@ class FileWranglerApp(QMainWindow):
         self.copy_button.pressed.connect(partial(self.execute_merge, ActionKeys.copy.value))
         self.progress_bar = QProgressBar()
         self.date_checkbox = QCheckBox("Append Date (YYYY.MM.DD) to destination file")
+        self.dir_include = QSpinBox()
+        self.dir_include.setMinimum(0)
+        self.dir_include.setValue(0)
+        self.dir_include.setMaximum(10)
         self.sort_name = QRadioButton("Name")
         self.sort_name.setChecked(True)
         self.sort_date = QRadioButton("Date")
@@ -110,6 +114,7 @@ class FileWranglerApp(QMainWindow):
         self.dropZone = DropZone()
 
         self.key_match_counter.valueChanged.connect(self.create_merge)
+        self.dir_include.valueChanged.connect(self.create_merge)
         self.dropZone.files_dropped_event.connect(self.create_merge)
         self.key_token_string.editTextChanged.connect(self.create_merge)
         self.key_regex.released.connect(partial(self.create_merge))
@@ -159,10 +164,16 @@ class FileWranglerApp(QMainWindow):
             key_layout.addWidget(self.key_separator)
             key_layout.addWidget(self.key_replace)
 
+            sub_control_layout = QHBoxLayout()
+            sub_control_layout.addWidget(QLabel("Dir. names:  "))
+            sub_control_layout.addWidget(self.dir_include)
+            sub_control_layout.addWidget(self.date_checkbox)
+            sub_control_layout.addWidget(QLabel(""), stretch=1)
+
             control_layout = QVBoxLayout()
             control_layout.addWidget(self.targetDir)
             control_layout.addLayout(key_layout)
-            control_layout.addWidget(self.date_checkbox)
+            control_layout.addLayout(sub_control_layout)
             # control_layout.addWidget(QLabel(""))
             control_layout.addLayout(button_layout)
 
@@ -206,7 +217,8 @@ class FileWranglerApp(QMainWindow):
             ConfigKeys.append_date: self.date_checkbox.isChecked(),
             ConfigKeys.key_token_string: self.key_token_string.currentText(),
             ConfigKeys.key_token_count: self.key_match_counter.value(),
-            ConfigKeys.sort_by: sort_key
+            ConfigKeys.sort_by: sort_key,
+            ConfigKeys.dir_include: self.dir_include.value()
         }
 
         if self.key_regex.isChecked():
@@ -221,9 +233,12 @@ class FileWranglerApp(QMainWindow):
         else:
             config[ConfigKeys.key_type] = KeyType.separator
 
-        model = create_merge_tree(self.dropZone.dropped_files, self.targetDir.getSelection(), config)
-        if model:
-            self.table.set_model(model)
+        try:
+            model = create_merge_tree(self.dropZone.dropped_files, self.targetDir.getSelection(), config)
+            if model:
+                self.table.set_model(model)
+        except FileNotFoundError as fne:
+            logger.error(f"File not found {fne.filename}")
 
     def execute_merge(self, action):
         file_items = self.table.model
