@@ -50,6 +50,8 @@ class EncoderCommand(CommonUtils.Command):
             if not self.file.is_supported():
                 copy_extensions = TransCodaSettings.get_copy_extensions()
                 _, extension = os.path.splitext(self.file.output_file)
+                if extension.startswith("."):
+                    extension = extension[1:]
                 if extension in copy_extensions:
                     executable = "copy"
                 else:

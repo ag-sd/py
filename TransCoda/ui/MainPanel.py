@@ -177,7 +177,7 @@ class MainPanel(QTableView):
         if len(rows) > 0:
             self.menu_item_event.emit(Action(item_value), rows)
 
-    def get_header_context_menu(self, _):
+    def get_header_context_menu(self, position):
         # Get Available Headers
         available = sorted(Header.__headers__, key=lambda key: key.display_name)
         # Get Selected Headers
@@ -188,7 +188,7 @@ class MainPanel(QTableView):
             checked = selected.__contains__(column)
             menu.addAction(CommonUtils.create_action(self, column.display_name,
                                                      self.column_header_selection, checked=checked))
-        menu.exec(QCursor.pos())
+        menu.exec_(self.mapToGlobal(position))
 
     def column_header_selection(self, item_name):
         for index, column in enumerate(self.file_model.get_columns()):
