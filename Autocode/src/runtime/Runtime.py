@@ -1,6 +1,7 @@
 from datetime import datetime
-from time import sleep
+
 from PyQt5.QtCore import (QObject, pyqtSignal, )
+
 import AutocodeUtils
 
 
@@ -27,7 +28,7 @@ class TaskRunner(QObject):
         hours_elapsed = 0
         process_count = 0
 
-        items = file_model.file_items
+        items = file_model.items
         while len(items) > process_count and hours_elapsed <= self.max_hours:
             curr_file = items[process_count]
             self.logger.info("Evaluating " + str(curr_file))
