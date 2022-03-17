@@ -4,6 +4,7 @@ from PyQt5.QtCore import QUrl
 
 import CommonUtils
 import MediaMetaData
+import TransCoda
 from MediaMetaData import MetaDataFields
 from TransCoda.core import TransCodaHistory
 from TransCoda.core.Encoda import EncoderStatus
@@ -32,7 +33,7 @@ class FileMetaDataExtractor(CommonUtils.Command):
                 else:
                     item.status = EncoderStatus.READY
                     if MetaDataFields.bit_rate not in metadata:
-                        print("WHY!!!")
+                        TransCoda.logger.error(f"Did not find bitrate in {item.file}!")
                     item_meta_data = {
                         Header.input_bitrate: metadata[MetaDataFields.bit_rate],
                         Header.input_duration: metadata[MetaDataFields.duration],
@@ -85,18 +86,26 @@ class FileMetaDataExtractor(CommonUtils.Command):
     @staticmethod
     def _read_m3u_or_similar(file):
         item_to_remove = FileItem(file)
-        item_to_remove.status = EncoderStatus.REMOVE
         item_list = [item_to_remove]
-        with open(file, "r") as reader:
-            for line in reader:
-                line = line.strip()
-                if not line.startswith("#"):
-                    url = QUrl(line)
-                    if url.isLocalFile() and os.path.exists(line):
-                        # TODO: check with file_dir + line
-                        item_list.append(FileItem(line))
-                    elif url.authority() != "":
-                        item_list.append(FileItem(file=file, url=line))
+        # Try to read the file:
+        try:
+            item_to_remove.status = EncoderStatus.REMOVE
+            with open(file, "r") as reader:
+                for line in reader:
+                    line = line.strip()
+                    if not line.startswith("#"):
+                        url = QUrl(line)
+                        if url.isLocalFile() and os.path.exists(line):
+                            # TODO: check with file_dir + line
+                            item_list.append(FileItem(line))
+                        elif url.authority() != "":
+                            item_list.append(FileItem(file=file, url=line))
+        except (UnicodeDecodeError, OSError):
+            TransCoda.logger.warn(f"Could not open/read file:{file}. Transcoda will skip this file")
+            item_to_remove.status = EncoderStatus.ERROR
+            item_list = [item_to_remove]
+            return item_list
+
         return item_list
 
 
