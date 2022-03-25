@@ -46,6 +46,8 @@ Trans:Coda lets you convert media from one format to another
 - [ ] ~~Change the encoder on a file~~
 - [ ] Process URL's on a single thread
 - [ ] Pause and resume encoding
+- [ ] Open source folder
+- [ ] Open destination folder
 
 - [ ] Extended format support<br>
   - [x] .aac<br>
