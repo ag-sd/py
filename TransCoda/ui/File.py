@@ -64,11 +64,14 @@ class Header(Enum):
         self.__class__.__headers__.append(self)
 
     def extract_value(self, file_item):
-        raw_value = self._extract_raw(file_item)
+        raw_value = self.extract_raw_value(file_item)
         if raw_value is not None and self.display_function is not None:
             return self.__class__.__display_function_map__[self.display_function](raw_value)
         else:
             return raw_value
+
+    def extract_raw_value(self, file_item):
+        return self._extract_raw(file_item)
 
     def _extract_raw(self, file_item):
         if self == Header.input_file_name:
@@ -262,11 +265,12 @@ class FileItemModel(QAbstractTableModel):
 
     def sort(self, column: int, order: Qt.SortOrder = Qt.AscendingOrder) -> None:
         def sorter(file_item):
-            value = header.extract_value(file_item)
-            if value is not None:
-                return str(value)
-            else:
-                return "0"
+            value = header.extract_raw_value(file_item)
+            if value is None:
+                value = "-"
+            print(value)
+            return value
+
         header = self.columnHeaders[column]
         self.file_items.sort(key=sorter, reverse=False if order == Qt.AscendingOrder else True)
         self.dataChanged.emit(QModelIndex(), QModelIndex())
