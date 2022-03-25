@@ -52,7 +52,7 @@ class EncoderCommand(CommonUtils.Command):
                 _, extension = os.path.splitext(self.file.output_file)
                 if extension.startswith("."):
                     extension = extension[1:]
-                if extension in copy_extensions:
+                if extension.lower() in copy_extensions:
                     executable = "copy"
                 else:
                     self.file.status = EncoderStatus.SKIPPED
