@@ -1,15 +1,14 @@
-import os
-
 from PyQt5.QtCore import (Qt, pyqtSignal, QMargins)
-from PyQt5.QtGui import QIcon, QCursor
+from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QTableView, QAbstractItemView, QMenu, QStyledItemDelegate, \
     QStyleOptionProgressBar, QApplication, QStyle
 
 import CommonUtils
-from TransCoda.ui.TransCodaSettings import SettingsKeys
+import TransCoda
 from TransCoda.ui import File, TransCodaSettings
 from TransCoda.ui.Actions import Action
 from TransCoda.ui.File import FileItemModel, Header
+from TransCoda.ui.TransCodaSettings import SettingsKeys
 
 
 class OutputDirectoryNotSet(Exception):
@@ -22,26 +21,29 @@ class EncoderNotSelected(Exception):
 
 class MainPanel(QTableView):
 
-    class ProgressBarDelegate(QStyledItemDelegate):
+    class FileItemDelegate(QStyledItemDelegate):
         def __init__(self, parent=None):
             super().__init__(parent)
             self.style = QApplication.style()
-            self.ok = QIcon(os.path.join(os.path.dirname(__file__), "../resource/2714.svg"))
+            self.ok = TransCoda.theme.ico_progress_done
+            self.waiting = TransCoda.theme.ico_progress_unknown
 
         def paint(self, painter, option, index):
             column_key = self.parent().get_column_key(index.column())
+            item = self.parent().get_items(index=index.row())
+            status_color = File.get_item_color(item)
+            painter.save()
+
+            if status_color.is_background_color:
+                painter.fillRect(option.rect, status_color.brush)
+
             if column_key == Header.percent_compete:
-                item = self.parent().get_items(index=index.row())
                 column_value = item.encode_percent
+                if option.state & QStyle.State_Selected:
+                    painter.fillRect(option.rect, option.palette.highlight())
                 if not column_value:
-                    # If no progress value, just let the system draw the value
-                    super().paint(painter, option, index)
-                    return
-                painter.save()
-                if column_value == 100:
-                    status_color = File.get_item_color(item)
-                    if status_color.is_background_color:
-                        painter.fillRect(option.rect, status_color.brush)
+                    self.waiting.paint(painter, option.rect)
+                elif column_value == 100:
                     self.ok.paint(painter, option.rect)
                 else:
                     progressbar_options = QStyleOptionProgressBar()
@@ -50,12 +52,12 @@ class MainPanel(QTableView):
                     progressbar_options.maximum = 100
                     progressbar_options.textAlignment = Qt.AlignCenter
                     progressbar_options.progress = int(column_value)
-                    progressbar_options.text = f"{progressbar_options.progress}%"
+                    progressbar_options.text = f" {progressbar_options.progress}%"
                     progressbar_options.textVisible = True
                     self.style.drawControl(QStyle.CE_ProgressBar, progressbar_options, painter)
-                painter.restore()
             else:
                 super().paint(painter, option, index)
+            painter.restore()
 
     files_changed_event = pyqtSignal(bool, 'PyQt_PyObject')
     menu_item_event = pyqtSignal(Action, set)
@@ -79,8 +81,7 @@ class MainPanel(QTableView):
         self.file_model = None
         self.clear_table()
         self.menu = self.create_context_menu()
-        self.progressbarDelegate = MainPanel.ProgressBarDelegate(parent=self)
-        self.setItemDelegate(self.progressbarDelegate)
+        self.setItemDelegate(MainPanel.FileItemDelegate(parent=self))
         TransCodaSettings.settings.settings_change_event.connect(self.settings_changed)
 
     def create_context_menu(self):
@@ -88,17 +89,17 @@ class MainPanel(QTableView):
         # menu.addAction(CommonUtils.create_action(self, "Open", self.menu_item_selected,
         #                                          icon=QIcon.fromTheme("document-open")))
         menu.addAction(CommonUtils.create_action(self, Action.DEL_FILE.value, self.menu_item_selected,
-                                                 icon=QIcon.fromTheme("list-remove")))
+                                                 icon=TransCoda.theme.ico_progress_unknown))
         menu.addAction(CommonUtils.create_action(self, Action.DEL_ALL.value, self.menu_item_selected,
-                                                 icon=QIcon.fromTheme("edit-delete")))
+                                                 icon=TransCoda.theme.ico_clear))
         menu.addSeparator()
         menu.addAction(CommonUtils.create_action(self, Action.ENCODE.value, self.menu_item_selected,
-                                                 icon=QIcon.fromTheme("media-playback-start")))
+                                                 icon=TransCoda.theme.ico_start))
         submenu = menu.addMenu("Change Status")
         submenu.addAction(CommonUtils.create_action(self, Action.CHANGE_STATUS_SUCCESS.value, self.menu_item_selected,
-                                                    icon=QIcon.fromTheme("face-smile")))
+                                                    icon=TransCoda.theme.ico_progress_done))
         submenu.addAction(CommonUtils.create_action(self, Action.CHANGE_STATUS_READY.value, self.menu_item_selected,
-                                                    icon=QIcon.fromTheme("face-plain")))
+                                                    icon=TransCoda.theme.ico_progress_unknown))
         return menu
 
     def dragEnterEvent(self, event):

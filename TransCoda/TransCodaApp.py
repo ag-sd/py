@@ -5,7 +5,6 @@ from datetime import datetime
 import psutil
 from PyQt5 import QtCore
 from PyQt5.QtCore import QTimer
-from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QProgressBar, QLabel, QPushButton, QMessageBox
 
 import CommonUtils
@@ -52,7 +51,7 @@ class TransCodaApp(QMainWindow):
             self.encoder.setText(TransCodaSettings.get_encoder_name())
         else:
             self.encoder.setText("No encoder selected.")
-        self.terminal_btn.setIcon(QIcon.fromTheme("utilities-terminal"))
+        self.terminal_btn.setIcon(TransCoda.theme.ico_terminal)
         self.terminal_btn.setFlat(True)
         self.terminal_btn.setToolTip("Show Encoder Logs")
         self.terminal_btn.clicked.connect(self.show_encode_logs)
@@ -63,7 +62,7 @@ class TransCodaApp(QMainWindow):
 
         self.setMinimumSize(800, 600)
         self.setWindowTitle(TransCoda.__APP_NAME__)
-        self.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), "resource/soundconverter.svg")))
+        self.setWindowIcon(TransCoda.theme.ico_app_icon)
         self.timer.timeout.connect(self.timer_timeout_event)
         self.timer.setInterval(6000)
         self.timer.setSingleShot(True)

@@ -3,7 +3,7 @@ import os
 from enum import Enum
 
 from PyQt5.QtCore import QMimeDatabase, QAbstractTableModel, Qt, QModelIndex, QVariant
-from PyQt5.QtGui import QIcon, QBrush, QColor
+from PyQt5.QtGui import QBrush, QColor
 
 import CommonUtils
 import TransCoda
@@ -252,10 +252,7 @@ class FileItemModel(QAbstractTableModel):
             if value is not None:
                 return value
         elif role == Qt.DecorationRole and index.column() == 0:
-            return _get_mime_icon(item.mime_type_icon_name)
-
-        elif role == Qt.BackgroundRole and color.is_background_color:
-            return color.brush
+            return TransCoda.theme.get_mime_icon(item.mime_type_icon_name)
 
         elif role == Qt.ForegroundRole and color.is_foreground_color:
             return color.brush
@@ -395,7 +392,6 @@ _status_color_map = {
 }
 
 _mime_database = QMimeDatabase()
-_mime_cache = {}
 
 
 def get_item_color(file_item):
@@ -403,12 +399,3 @@ def get_item_color(file_item):
         return _status_color_map[EncoderStatus.UNSUPPORTED]
     else:
         return _status_color_map[file_item.status]
-
-
-def _get_mime_icon(mime_type_icon_name):
-    if mime_type_icon_name not in _mime_cache:
-        mime_icon = QIcon.fromTheme(mime_type_icon_name)
-        if mime_icon is None:
-            mime_icon = QIcon.fromTheme("text-x-generic")
-        _mime_cache[mime_type_icon_name] = mime_icon
-    return _mime_cache[mime_type_icon_name]

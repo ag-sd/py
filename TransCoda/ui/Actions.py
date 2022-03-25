@@ -1,10 +1,10 @@
 from enum import Enum
 
 from PyQt5.QtCore import pyqtSignal, QSize
-from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QToolBar
 
 import CommonUtils
+import TransCoda
 from TransCoda.core.Encoda import EncoderStatus
 
 
@@ -36,31 +36,31 @@ class MainToolBar(QToolBar):
         self.action_add_file = CommonUtils.create_action(name=Action.ADD_FILE.name, shortcut="Ctrl+O",
                                                          tooltip="Add a single file ",
                                                          func=self.raise_event, parent=self,
-                                                         icon=QIcon.fromTheme("list-add"))
+                                                         icon=TransCoda.theme.ico_add)
         self.action_add_dir = CommonUtils.create_action(name=Action.ADD_DIR.name, shortcut="Ctrl+D",
                                                         tooltip="Add an entire directory",
                                                         func=self.raise_event, parent=self,
-                                                        icon=QIcon.fromTheme("folder-new"))
+                                                        icon=TransCoda.theme.ico_folder)
         self.action_clear_all = CommonUtils.create_action(name=Action.DEL_ALL.name, shortcut="Delete",
                                                           tooltip="Clear all files",
                                                           func=self.raise_event, parent=self,
-                                                          icon=QIcon.fromTheme("edit-clear"))
+                                                          icon=TransCoda.theme.ico_clear)
         self.action_settings = CommonUtils.create_action(name=Action.SETTINGS.name, shortcut="Ctrl+R",
                                                          tooltip="Open the settings editor",
                                                          func=self.raise_event, parent=self,
-                                                         icon=QIcon.fromTheme("preferences-system"))
+                                                         icon=TransCoda.theme.ico_settings)
         self.action_encode = CommonUtils.create_action(name=Action.ENCODE.name, shortcut="Ctrl+R",
                                                        tooltip="Start encoding the files",
                                                        func=self.raise_event, parent=self,
-                                                       icon=QIcon.fromTheme("media-playback-start"))
+                                                       icon=TransCoda.theme.ico_start)
         self.action_help = CommonUtils.create_action(name=Action.HELP.name, shortcut="F1",
                                                      tooltip="View online help",
                                                      func=self.raise_event, parent=self,
-                                                     icon=QIcon.fromTheme("help-contents"))
+                                                     icon=TransCoda.theme.ico_help_contents)
         self.action_about = CommonUtils.create_action(name=Action.ABOUT.name, shortcut="Ctrl+I",
                                                       tooltip="About this application",
                                                       func=self.raise_event, parent=self,
-                                                      icon=QIcon.fromTheme("help-about"))
+                                                      icon=TransCoda.theme.ico_help_about)
         self.addAction(self.action_add_file)
         self.addAction(self.action_add_dir)
         self.addAction(self.action_clear_all)
@@ -97,7 +97,7 @@ class MainToolBar(QToolBar):
         self.action_settings.setEnabled(True)
         self.action_help.setEnabled(True)
         self.action_about.setEnabled(True)
-        self.action_encode.setIcon(QIcon.fromTheme("media-playback-start"))
+        self.action_encode.setIcon(TransCoda.theme.ico_start)
         self.set_encode_state(file_count, output_dir, encoder_name)
 
     def encoding_started(self):
@@ -107,5 +107,5 @@ class MainToolBar(QToolBar):
         self.action_settings.setEnabled(False)
         self.action_help.setEnabled(False)
         self.action_about.setEnabled(False)
-        self.action_encode.setIcon(QIcon.fromTheme("media-playback-stop"))
+        self.action_encode.setIcon(TransCoda.theme.ico_stop)
         self.action_encode.setToolTip(self._ACTION_ENCODE_RUNNING_MESSAGE)

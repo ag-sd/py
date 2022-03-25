@@ -4,12 +4,13 @@ import sys
 from datetime import datetime
 
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
-from PyQt5.QtGui import QStandardItemModel, QStandardItem, QPainter, QIcon
+from PyQt5.QtGui import QStandardItemModel, QStandardItem, QPainter
 from PyQt5.QtWidgets import QDialog, QApplication, QTreeView, QComboBox, QHBoxLayout, \
     QStyle, QStyleOptionComboBox, QLineEdit, QGroupBox, QLabel, QWidget, \
     QGridLayout, QToolBar, QVBoxLayout, QDialogButtonBox
 
 import CommonUtils
+import TransCoda
 from CustomUI import QHLine
 
 
@@ -296,14 +297,14 @@ class TransCodaEditor(QWidget):
         self.encoder_view = EncoderView()
         self.actions = QToolBar()
         self.caption = caption
-        self.add_action = CommonUtils.create_action(tooltip="Add Encoder", icon=QIcon.fromTheme("list-add"),
+        self.add_action = CommonUtils.create_action(tooltip="Add Encoder", icon=TransCoda.theme.ico_add_item,
                                                     func=self.action_add, name="Add", parent=self)
-        self.del_action = CommonUtils.create_action(tooltip="Delete Encoder", icon=QIcon.fromTheme("list-remove"),
+        self.del_action = CommonUtils.create_action(tooltip="Delete Encoder", icon=TransCoda.theme.ico_clear,
                                                     func=self.action_del, name="Delete", parent=self)
         self.mod_action = CommonUtils.create_action(tooltip="Edit Encoder",
-                                                    icon=QIcon.fromTheme("accessories-text-editor"),
+                                                    icon=TransCoda.theme.ico_edit,
                                                     func=self.action_mod, name="Edit", parent=self)
-        self.ref_action = CommonUtils.create_action(tooltip="Refresh Encoder", icon=QIcon.fromTheme("view-refresh"),
+        self.ref_action = CommonUtils.create_action(tooltip="Refresh Encoder", icon=TransCoda.theme.ico_refresh,
                                                     func=self.action_ref, name="Refresh", parent=self)
         self._init_ui()
 
