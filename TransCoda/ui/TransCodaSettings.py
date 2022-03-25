@@ -28,6 +28,7 @@ class SettingsKeys(Enum):
     columns = "columns"
     sort_order = "sort_order"
     copy_extensions = "copy_extensions"
+    use_system_theme = "use_system_theme"
 
 
 settings = AppSettings(
@@ -85,6 +86,10 @@ def sort_by_size():
     return settings.get_setting(SettingsKeys.sort_by_size, Qt.Unchecked) == Qt.Checked
 
 
+def use_system_theme():
+    return settings.get_setting(SettingsKeys.use_system_theme, Qt.Unchecked) == Qt.Checked
+
+
 def get_copy_extensions():
     return settings.get_setting(SettingsKeys.copy_extensions, "")
 
@@ -127,6 +132,7 @@ class TransCodaSettings(QDialog):
         self.preserve_times = QCheckBox("Preserve original file times in result")
         self.delete_metadata = QCheckBox("Delete all tag information in result")
         self.single_thread_video = QCheckBox("Process video in a single thread only")
+        self.use_system_theme = QCheckBox("Use System theme for icons (requires restart)")
         self.history = QCheckBox("Skip files if they have been processed before")
         self.sort_by_size = QCheckBox("Encode the largest files first")
         self.encoder_editor = TransCodaEditor.TransCodaEditor(caption="Available Encoders")
@@ -146,6 +152,7 @@ class TransCodaSettings(QDialog):
         self._set_checkbox(self.history, SettingsKeys.skip_previously_processed, self.set_setting)
         self._set_checkbox(self.sort_by_size, SettingsKeys.sort_by_size, self.set_setting)
         self._set_checkbox(self.single_thread_video, SettingsKeys.single_thread_video, self.set_setting)
+        self._set_checkbox(self.use_system_theme, SettingsKeys.use_system_theme, self.set_setting)
 
         self.encoder_editor.select_encoder(settings.get_setting(SettingsKeys.encoder_path, "NA"))
         self.encoder_editor.encoder_changed.connect(self.set_encoder)
@@ -186,11 +193,16 @@ class TransCodaSettings(QDialog):
         layout.addWidget(self.unsupported_extensions_to_copy)
 
         layout.addWidget(QHLine())
+        layout.addWidget(QLabel("<u>Appearance</u>"))
+        layout.addWidget(self.use_system_theme)
+
+        layout.addWidget(QHLine())
         buttons = QDialogButtonBox(QDialogButtonBox.Ok, Qt.Horizontal, self)
         buttons.clicked.connect(self.close)
         layout.addWidget(buttons)
         self.setLayout(layout)
         self.setWindowTitle("Settings")
+        self.setWindowIcon(TransCoda.theme.ico_app_icon)
 
     @staticmethod
     def set_encoder(path, encoder):

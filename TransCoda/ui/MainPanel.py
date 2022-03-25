@@ -22,16 +22,17 @@ class EncoderNotSelected(Exception):
 class MainPanel(QTableView):
 
     class FileItemDelegate(QStyledItemDelegate):
-        def __init__(self, parent=None):
+        def __init__(self, theme, parent=None):
             super().__init__(parent)
+            self.theme = theme
             self.style = QApplication.style()
-            self.ok = TransCoda.theme.ico_progress_done
-            self.waiting = TransCoda.theme.ico_progress_unknown
+            self.ok = self.theme.ico_progress_done
+            self.waiting = self.theme.ico_progress_unknown
 
         def paint(self, painter, option, index):
             column_key = self.parent().get_column_key(index.column())
             item = self.parent().get_items(index=index.row())
-            status_color = File.get_item_color(item)
+            status_color = self.theme.get_item_color(file_status=item.status, file_is_supported=item.is_supported())
             painter.save()
 
             if status_color.is_background_color:
@@ -81,7 +82,7 @@ class MainPanel(QTableView):
         self.file_model = None
         self.clear_table()
         self.menu = self.create_context_menu()
-        self.setItemDelegate(MainPanel.FileItemDelegate(parent=self))
+        self.setItemDelegate(MainPanel.FileItemDelegate(theme=TransCoda.theme, parent=self))
         TransCodaSettings.settings.settings_change_event.connect(self.settings_changed)
 
     def create_context_menu(self):

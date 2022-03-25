@@ -264,6 +264,7 @@ class EncoderView(QDialog):
 
         self.setLayout(main_layout)
         self.setMinimumWidth(400)
+        self.setWindowIcon(TransCoda.theme.ico_app_icon)
 
     def accept(self):
         self.details = {

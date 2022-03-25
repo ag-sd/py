@@ -1,6 +1,8 @@
 from PyQt5.QtGui import QFontDatabase, QTextCursor
 from PyQt5.QtWidgets import QDialog, QComboBox, QTextEdit, QVBoxLayout
 
+import TransCoda
+
 
 class TerminalView(QDialog):
     def __init__(self):
@@ -21,6 +23,7 @@ class TerminalView(QDialog):
         self.setLayout(layout)
         self.setModal(False)
         self.setMinimumSize(800, 450)
+        self.setWindowIcon(TransCoda.theme.ico_app_icon)
 
     def log_message(self, message):
         _file = message['file']

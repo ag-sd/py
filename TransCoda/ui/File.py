@@ -2,8 +2,7 @@ import copy
 import os
 from enum import Enum
 
-from PyQt5.QtCore import QMimeDatabase, QAbstractTableModel, Qt, QModelIndex, QVariant
-from PyQt5.QtGui import QBrush, QColor
+from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, QVariant, QMimeDatabase
 
 import CommonUtils
 import TransCoda
@@ -11,12 +10,7 @@ from TransCoda.core.Encoda import EncoderStatus
 from TransCoda.ui import TransCodaSettings
 
 
-class StatusColor:
-    def __init__(self, r, g, b, a, is_background_color):
-        self.brush = QBrush(QColor(r, g, b, a))
-        self.is_background_color = is_background_color
-        self.is_foreground_color = not is_background_color
-
+_mime_database = QMimeDatabase()
 
 class DisplayFunctionMapping(Enum):
     FILE_SIZE = 1
@@ -245,7 +239,7 @@ class FileItemModel(QAbstractTableModel):
             return QVariant()
 
         item = self.file_items[index.row()]
-        color = get_item_color(item)
+        color = TransCoda.theme.get_item_color(file_status=item.status, file_is_supported=item.is_supported())
         if role == Qt.DisplayRole:
             header = self.columnHeaders[index.column()]
             value = header.extract_value(item)
@@ -379,23 +373,3 @@ class FileItemModel(QAbstractTableModel):
             self.endRemoveColumns()
             TransCodaSettings.save_columns(self.columnHeaders)
 
-
-_status_color_map = {
-    EncoderStatus.READY: StatusColor(255, 255, 255, 0, True),
-    EncoderStatus.WAITING: StatusColor(255, 140, 0, 50, True),
-    EncoderStatus.SUCCESS: StatusColor(152, 251, 152, 75, True),
-    EncoderStatus.ERROR: StatusColor(220, 20, 60, 75, True),
-    EncoderStatus.IN_PROGRESS: StatusColor(244, 164, 96, 75, True),
-    EncoderStatus.READING_METADATA: StatusColor(192, 192, 192, 255, False),
-    EncoderStatus.UNSUPPORTED: StatusColor(195, 195, 195, 125, True),
-    EncoderStatus.SKIPPED: StatusColor(80, 90, 100, 125, True)
-}
-
-_mime_database = QMimeDatabase()
-
-
-def get_item_color(file_item):
-    if not file_item.is_supported():
-        return _status_color_map[EncoderStatus.UNSUPPORTED]
-    else:
-        return _status_color_map[file_item.status]

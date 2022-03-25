@@ -107,7 +107,9 @@ class TransCodaApp(QMainWindow):
 
     def files_changed_event(self, is_added, files):
         if is_added:
+            self.statusBar().showMessage("Scanning files please wait...")
             scanner = CommonUtils.FileScanner(files, recurse=True, is_qfiles=True)
+            self.statusBar().showMessage(f"Loading files into {TransCoda.__APP_NAME__}")
             # Add files first
             total_added = self.main_panel.add_files(scanner.files)
             # Fetch and enrich with metadata
