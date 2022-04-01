@@ -87,8 +87,8 @@ class MainPanel(QTableView):
 
     def create_context_menu(self):
         menu = QMenu()
-        # menu.addAction(CommonUtils.create_action(self, "Open", self.menu_item_selected,
-        #                                          icon=QIcon.fromTheme("document-open")))
+        menu.addAction(CommonUtils.create_action(self, Action.OPEN_FILE.value, self.menu_item_selected,
+                                                 icon=TransCoda.theme.ico_doc))
         menu.addAction(CommonUtils.create_action(self, Action.DEL_FILE.value, self.menu_item_selected,
                                                  icon=TransCoda.theme.ico_progress_unknown))
         menu.addAction(CommonUtils.create_action(self, Action.DEL_ALL.value, self.menu_item_selected,
@@ -96,6 +96,11 @@ class MainPanel(QTableView):
         menu.addSeparator()
         menu.addAction(CommonUtils.create_action(self, Action.ENCODE.value, self.menu_item_selected,
                                                  icon=TransCoda.theme.ico_start))
+        menu.addSeparator()
+        menu.addAction(CommonUtils.create_action(self, Action.OPEN_SOURCE.value, self.menu_item_selected,
+                                                 icon=TransCoda.theme.ico_folder))
+        menu.addAction(CommonUtils.create_action(self, Action.OPEN_DEST.value, self.menu_item_selected,
+                                                 icon=TransCoda.theme.ico_folder))
         submenu = menu.addMenu("Change Status")
         submenu.addAction(CommonUtils.create_action(self, Action.CHANGE_STATUS_SUCCESS.value, self.menu_item_selected,
                                                     icon=TransCoda.theme.ico_progress_done))

@@ -47,6 +47,7 @@ class Theme:
         self.ico_help_about = self._get_icon("help-about")
         self.ico_help_contents = self._get_icon("help-contents")
         self.ico_edit = self._get_icon("accessories-text-editor")
+        self.ico_doc = self._get_icon("document-open")
         self.mime_cache = {}
 
     def get_mime_icon(self, mime_type_icon_name):

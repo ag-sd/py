@@ -36,7 +36,7 @@ Trans:Coda lets you convert media from one format to another
   - [x] Add ability to configure this
 - [ ] Profiles
 - [ ] Configure option to load metadata  
-- [ ] Split and Ebencode Cue files: 
+- [ ] Split and encode Cue files: 
   - https://unix.stackexchange.com/questions/10251/how-do-i-split-a-flac-with-a-cue
   - https://stackoverflow.com/questions/46508055/using-ffmpeg-to-cut-audio-from-to-position
 - [x] Download links specified in a playlist.m3u file 
@@ -46,10 +46,11 @@ Trans:Coda lets you convert media from one format to another
 - [ ] ~~Change the encoder on a file~~
 - [ ] Process URL's on a single thread
 - [ ] Pause and resume encoding
-- [ ] Open source folder
-- [ ] Open destination folder
+- [x] Open source folder
+- [x] Open destination folder
+- [x] Open Item
 
-- [ ] Extended format support<br>
+- [x] Extended format support<br>
   - [x] .aac<br>
   - [x] .aiff<br>
   - [x] .amr<br>

@@ -20,6 +20,9 @@ class Action(Enum):
     ABOUT = "About"
     CHANGE_STATUS_SUCCESS = EncoderStatus.SUCCESS.name
     CHANGE_STATUS_READY = EncoderStatus.READY.name
+    OPEN_SOURCE = "Open Source Dir. ..."
+    OPEN_DEST = "Open Destination Dir. ..."
+    OPEN_FILE = "Open..."
 
 
 class MainToolBar(QToolBar):
@@ -73,7 +76,7 @@ class MainToolBar(QToolBar):
         self.set_encode_state(0, None, None)
 
     def set_encode_state(self, file_count, output_dir, encoder_name):
-        enabled = encoder_name is not None and output_dir is not None and output_dir is not "" and file_count != 0
+        enabled = encoder_name is not None and output_dir is not None and output_dir != "" and file_count != 0
         self.action_encode.setEnabled(enabled)
         if enabled:
             self.action_encode.setToolTip(self._ACTION_ENCODE_READY_MESSAGE)

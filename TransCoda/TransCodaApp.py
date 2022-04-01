@@ -98,6 +98,13 @@ class TransCodaApp(QMainWindow):
             self.main_panel.update_item_status(item_indices, EncoderStatus.SUCCESS)
         elif event == Action.CHANGE_STATUS_READY:
             self.main_panel.update_item_status(item_indices, EncoderStatus.READY)
+        elif event == Action.OPEN_FILE:
+            self.open_paths_in_system_default(item_indices, "file")
+        elif event == Action.OPEN_SOURCE:
+            self.open_paths_in_system_default(item_indices, "file", func=os.path.dirname)
+        elif event == Action.OPEN_DEST:
+            self.open_paths_in_system_default(item_indices, "output_file", func=os.path.dirname)
+
         elif event == Action.ABOUT:
             with open(os.path.join(os.path.dirname(__file__), "resource/about.html"), 'r') as file:
                 about_html = file.read()
@@ -248,6 +255,25 @@ class TransCodaApp(QMainWindow):
         TransCodaSettings.save_encode_list(self.main_panel.get_items())
         TransCoda.logger.info("Saving UI...")
         TransCodaSettings.settings.save_ui(self, TransCoda.logger)
+
+    def open_paths_in_system_default(self, item_indices, attr, func=None):
+        locations = set()
+        for index in item_indices:
+            item = self.main_panel.get_items(index)
+            if hasattr(item, attr):
+                if func:
+                    locations.add(func(getattr(item, attr)))
+                else:
+                    locations.add(getattr(item, attr))
+
+        if len(locations) > 3:
+            choice = QMessageBox.question(self, "Are you Sure?",
+                                          f"You are attempting to open several directories. "
+                                          f"Are you sure you want to proceed?")
+            if choice == QMessageBox.No:
+                return
+        for loc in locations:
+            CommonUtils.open_file_item(loc)
 
 
 def main():
