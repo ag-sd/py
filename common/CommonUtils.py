@@ -1,7 +1,9 @@
 import datetime
 import hashlib
 import logging
+import mimetypes
 import os
+import subprocess
 from functools import partial
 from os import path
 
@@ -9,6 +11,12 @@ from PyQt5.QtCore import QObject, pyqtSignal, QSettings, QThread, QThreadPool, Q
 from PyQt5.QtWidgets import QCheckBox, QRadioButton, QGroupBox, QWidget, QSplitter, QAction
 
 from common.CustomUI import FileChooserTextBox
+
+
+def batch(iterable, batch_size=10):
+    total_size = len(iterable)
+    for index in range(0, total_size, batch_size):
+        yield iterable[index:min(index + batch_size, total_size)]
 
 
 def get_logger(app_name):
@@ -60,6 +68,16 @@ def from_human_readable_filesize(text):
         return float(text[:-1])
     else:
         return None
+
+
+def open_file_item(file_item):
+    from sys import platform
+    if platform == "linux" or platform == "linux2":
+        subprocess.Popen(["xdg-open", file_item])
+    elif platform == "darwin":
+        subprocess.call(['open', file_item])
+    elif platform == "win32":
+        subprocess.Popen(["explorer", "/select,", file_item])
 
 
 def human_readable_time(seconds):
@@ -232,12 +250,9 @@ class FileScanner:
     A class to scan a collection of Qfile file URL's which may represent files or directories
     and create a list of files in this collection
     """
-    def __init__(self, file_urls, recurse=False, supported_extensions=None, is_qfiles=True):
+    def __init__(self, file_urls, recurse=False, supported_extensions=None, is_qfiles=True, partial_mimetypes_list=None):
         super().__init__()
-        if supported_extensions is not None:
-            self.supported_extensions = [x.upper() for x in supported_extensions]
-        else:
-            self.supported_extensions = None
+        self.supported_extensions = self._get_extensions(supported_extensions, partial_mimetypes_list)
         self.recurse = recurse
         if is_qfiles:
             self.files, self.rejected_files = self._scan_q_files(file_urls, recurse)
@@ -312,6 +327,25 @@ class FileScanner:
             return self.supported_extensions.__contains__(ext.upper())
         return True
 
+    @staticmethod
+    def _get_extensions(supported_extensions, partial_mimetypes_list):
+        extensions = set()
+        if partial_mimetypes_list is not None:
+            db = mimetypes.MimeTypes()
+            for partial_mime_type in partial_mimetypes_list:
+                partial_mime_type = partial_mime_type.upper()
+                for _map in db.types_map_inv:
+                    for key, value in _map.items():
+                        if partial_mime_type in key.upper():
+                            for ext in value:
+                                extensions.add(ext.upper())
+        if supported_extensions is not None:
+            for x in supported_extensions:
+                extensions.add(x.upper())
+        if len(extensions) == 0:
+            return None
+        return extensions
+
 
 class ProcessRunnerException(Exception):
     def __init__(self, cmd, exit_code, stdout, stderr):
@@ -343,6 +377,9 @@ class Command(QRunnable):
         self.signals.complete.emit((end_time - start_time).total_seconds())
 
     def do_work(self):
+        pass
+
+    def work_size(self):
         pass
 
 
