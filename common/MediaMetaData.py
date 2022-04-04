@@ -1,9 +1,14 @@
 import json
 import mimetypes
+import os.path
 import shlex
 import subprocess
+from collections import defaultdict
+from datetime import datetime
 from enum import Enum
 from shutil import which
+
+import CommonUtils
 
 _MISSING_DATA = "Not Available"
 # http://www.imagemagick.org/script/identify.php
@@ -14,6 +19,7 @@ _MEDIA_COMMAND_ARGS = "ffprobe -v error -select_streams a:0 -show_entries " \
                 "'stream=codec_name,codec_long_name,codec_type,channels,channel_layout," \
                 "sample_rate,bits_per_sample,avg_frame_rate : format=bit_rate,duration,format_long_name,size : " \
                 "format_tags : stream_tags' -of json "
+_CHUNK_SIZE = 8192
 
 if which("ffprobe") is None:
     raise Exception("This package requires ffprobe which was not found on this system")
@@ -21,21 +27,37 @@ if which("ffprobe") is None:
 if which("magick") is None:
     raise Exception("This package requires imagemagick which was not found on this system")
 
+mimetypes.init()
 
-def get_metadata(file):
-    mime_type = mimetypes.guess_type(file)[0].upper()
-    if mime_type.startswith("IMAGE"):
-        return _get_image_metadata(_execute(_IMAGE_COMMAND_ARGS + f"\"{file}\""))
-    elif mime_type.startswith("AUDIO") or mime_type.startswith("VIDEO"):
-        metadata = _execute(_MEDIA_COMMAND_ARGS + f"\"{file}\"")
-        if metadata:
-            return _get_media_metadata(json.loads(metadata))
-    else:
+
+def get_metadata(file, include_checksum=False):
+    def _add_checksum(_metadata):
+        if include_checksum:
+            _metadata[MetaDataFields.checksum] = CommonUtils.calculate_sha256_hash(file)
+        return _metadata
+
+    if not os.path.exists(file):
         return None
+
+    try:
+        mime_type = mimetypes.guess_type(file)[0].upper()
+    except AttributeError:
+        return None
+
+    metadata = defaultdict(lambda: None)
+    if mime_type.startswith("IMAGE"):
+        metadata = _get_image_metadata(_execute(_IMAGE_COMMAND_ARGS + f"\"{file}\""))
+    elif mime_type.startswith("AUDIO") or mime_type.startswith("VIDEO"):
+        m_metadata = _execute(_MEDIA_COMMAND_ARGS + f"\"{file}\"")
+        if m_metadata:
+            metadata = _get_media_metadata(json.loads(m_metadata))
+    _add_file_details(file, metadata)
+    _add_checksum(metadata)
+    return metadata
 
 
 def _get_image_metadata(metadata):
-    params = {}
+    params = defaultdict(lambda: None)
     for line in metadata.split("\n"):
         line = line.strip()
         for metadata_field in MetaDataFields:
@@ -59,7 +81,7 @@ def _get_media_metadata(metadata):
                 dest[field] = source[field.name]
         return dest
 
-    params = {}
+    params = defaultdict(lambda: None)
     if "streams" in metadata:
         if len(metadata["streams"]) > 0:
             stream_info = metadata["streams"][0]
@@ -74,6 +96,19 @@ def _get_media_metadata(metadata):
             return None
 
     return params
+
+
+def _add_file_details(file, metadata):
+    _, ext = os.path.splitext(file)
+    file_path, file_name = os.path.split(file)
+    stats = os.stat(file)
+    metadata[MetaDataFields.filename] = file_name
+    metadata[MetaDataFields.filepath] = file_path
+    metadata[MetaDataFields.filesize] = stats.st_size
+    metadata[MetaDataFields.created] = stats.st_ctime
+    metadata[MetaDataFields.accessed] = stats.st_atime
+    metadata[MetaDataFields.extension] = ext
+    metadata[MetaDataFields.mimetype] = mimetypes.guess_type(file)[0]
 
 
 def _execute(command):
@@ -121,8 +156,15 @@ class MetaDataFields(Enum):
     compression = "compression", None, "Compression:"
     quality = "quality", None, "Quality:"
     signature = "signature", None, "signature:"
-    filesize = "filesize", None, "Filesize:"
     number_pixels = "number_pixels", None, "Number pixels:"
+    checksum = "checksum", None
+    filename = "filename", None
+    filepath = "filepath", None
+    filesize = "filesize", None
+    created = "created", None
+    accessed = "accessed", None
+    extension = "extension", None
+    mimetype = "mimetype", None
 
     def __init__(self, _, field_type=None, magick_key=None):
         if field_type:
@@ -137,9 +179,23 @@ class MetaDataFields(Enum):
 
 if __name__ == '__main__':
     files = [
-        "/mnt/Stuff/testing/audio/1_XdqiA-pdkeFuX5W2-NSaNg.jpeg",
+
     ]
-    for _file in files:
-        print("dispatching " + _file)
-        meta = get_metadata(_file)
-        print(meta)
+
+    repeats = 1
+    start_time = datetime.now()
+    for i in range(0, repeats):
+        if i % 10 == 0:
+            print(f"Currently processing {i}")
+
+        for _file in files:
+            print("dispatching " + _file)
+            meta = get_metadata(_file, include_checksum=True)
+            if meta:
+                for field in MetaDataFields.__iter__():
+                    print(f"{field}\t\t\t -> {meta[field]}")
+    end_time = datetime.now()
+    print(f"Completed {repeats * len(files)} requests in {(end_time - start_time).total_seconds()} seconds")
+
+
+
