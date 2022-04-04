@@ -13,9 +13,9 @@ from TransCoda.ui.File import FileItem, Header
 
 class FileMetaDataExtractor(CommonUtils.Command):
     def __init__(self, input_files, batch_size=15):
+        super().__init__()
         self.files = self._create_work_files(input_files)
         self.batch_size = batch_size
-        super().__init__()
 
     def work_size(self):
         return self.batch_size
