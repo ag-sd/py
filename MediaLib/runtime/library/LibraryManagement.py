@@ -126,12 +126,8 @@ def delete_library(library, skip_file_deletes=False):
 
 
 def delete_from_library(library, files):
-    file_ps = []
-    for file in files:
-        file_ps.append(file.file)
-
     conn = db.cursor() # TODO FIXME Use With
-    FileManagement.delete_files(library, file_ps, conn)
+    FileManagement.delete_files(library, files, conn)
     conn.close()
 
 
@@ -156,7 +152,7 @@ def refresh_library(library):
     # Step 1: Get files in library that are in the database
     db_files = {}
     for file in get_files_in_library(library):
-        pass
+        db_files[file.file] = file
 
     MediaLib.logger.debug("DB files fetched...")
 
@@ -177,33 +173,35 @@ def refresh_library(library):
     for file_p in fs_files:
         file = FileManagement.FileRecord(file_p, metadata=None)
         if file_p in db_files:
-            if not db_files[file].__eq__(file):
-                deletes.append(file_p)
-                file.updated = datetime.datetime.now()
+            if not db_files[file_p].__eq__(file):
+                deletes.append(file)
+                file.catalog_updated = datetime.datetime.now()
                 updates.append(file)
                 db_files.pop(file_p)
-            # Else, file unchanged. Leave it as is
+            else:
+                # file unchanged. Leave it as is
+                db_files.pop(file_p)
         else:
             # New File
             inserts.append(file)
 
         counter = counter + 1
     # What is left in the db needs to be deleted as it was not found in the filesystem
-    for file_p in db_files.keys():
-        deletes.append(file_p)
+    for f in db_files.values():
+        deletes.append(f)
 
     MediaLib.logger.info(f"{len(updates)} files to be updated in library")
     if len(updates):
-        MediaLib.logger.debug("*********** Updated Files *********** \n" + "\n".join([e.file for e in updates]) + "\n\n")
+        MediaLib.logger.debug("******* Updated Files ******* \n" + "\n".join([e.file for e in updates]) + "\n\n")
     MediaLib.logger.info(f"{len(inserts)} files to be inserted in library")
     if len(inserts):
-        MediaLib.logger.debug("*********** Inserted Files *********** \n" + "\n".join([e.file for e in inserts]) + "\n\n")
+        MediaLib.logger.debug("******* Inserted Files ******* \n" + "\n".join([e.file for e in inserts]) + "\n\n")
     MediaLib.logger.info(f"{len(deletes)} files to be deleted from library")
     if len(deletes):
-        MediaLib.logger.debug("*********** Deleted Files *********** \n" + "\n".join([e.file for e in deletes]) + "\n\n")
+        MediaLib.logger.debug("******* Deleted Files ******* \n" + "\n".join([e.file for e in deletes]) + "\n\n")
     MediaLib.logger.info(f"{len(rejects)} files to be excluded from library")
     if len(rejects):
-        MediaLib.logger.debug("*********** Rejected Files *********** \n" + "\n".join(rejects) + "\n\n")
+        MediaLib.logger.debug("******* Rejected Files ******* \n" + "\n".join(rejects) + "\n\n")
 
     # Step 5: Insert the data
     FileManagement.delete_files(library, deletes, conn)
@@ -270,6 +268,11 @@ else:
     assert(len(_db_files) - 4 == len(_db_files_post_dels))
     for d in _dels:
         assert d not in _db_files_post_dels
+
+    MediaLib.logger.info("Test : Refresh the library")
+    refresh_library(_library)
+    _db_files_post_refresh = get_files_in_library(_library)
+    assert (len(_db_files) - 4 == len(_db_files_post_dels))
 
     MediaLib.logger.info("Test : Delete the library")
     delete_library(_library, skip_file_deletes=False)

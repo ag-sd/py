@@ -33,7 +33,8 @@ def delete_files(library, files, db_conn):
     Deletes the specified files from the database
     """
     MediaLib.logger.info(f"About to delete {len(files)} records from the library {library.name}")
-    batches = [files[x:x + __LIB_BATCH_SIZE] for x in range(0, len(files), __LIB_BATCH_SIZE)]
+    filez = list(map(lambda x: x.file, files))
+    batches = [filez[x:x + __LIB_BATCH_SIZE] for x in range(0, len(filez), __LIB_BATCH_SIZE)]
 
     db_conn.execute("begin")
     try:
@@ -76,7 +77,8 @@ def get_files(library, db_conn):
         catalog_updated = data.pop(__LIB_FIELD_CATALOG_UPDATED)
         if catalog_updated:
             catalog_updated = datetime.datetime.fromisoformat(catalog_updated)
-        db_files.append(FileRecord(file, data, cataloged, catalog_updated))
+        metadata = {MetaDataFields[k]: v for k, v in data.items()}
+        db_files.append(FileRecord(file, metadata, cataloged, catalog_updated))
 
     MediaLib.logger.info(f"Found {len(db_files)} records in the database")
     return db_files
