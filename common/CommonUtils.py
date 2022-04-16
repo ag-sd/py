@@ -14,6 +14,7 @@ from common.CustomUI import FileChooserTextBox
 
 
 def batch(iterable, batch_size=10):
+    iterable = list(iterable)
     total_size = len(iterable)
     for index in range(0, total_size, batch_size):
         yield iterable[index:min(index + batch_size, total_size)]
@@ -99,7 +100,7 @@ def create_toolbar_action(tooltip, icon, func, text=""):
     return action
 
 
-def create_action(parent, name, func, shortcut=None, tooltip=None, icon=None, checked=None):
+def create_action(parent, name, func=None, shortcut=None, tooltip=None, icon=None, checked=None):
     action = QAction(name, parent)
     if shortcut is not None:
         action.setShortcut(shortcut)
@@ -107,7 +108,8 @@ def create_action(parent, name, func, shortcut=None, tooltip=None, icon=None, ch
         if shortcut is not None:
             tooltip = f"{tooltip} ({shortcut})"
         action.setToolTip(tooltip)
-    action.triggered.connect(partial(func, name))
+    if func:
+        action.triggered.connect(partial(func, name))
     if icon is not None:
         action.setIcon(icon)
     if checked is not None:
@@ -360,7 +362,7 @@ class ProcessRunnerException(Exception):
 
 class CommandSignals(QObject):
     result = pyqtSignal('PyQt_PyObject')
-    complete = pyqtSignal('PyQt_PyObject')
+    __complete__ = pyqtSignal('PyQt_PyObject')
     status = pyqtSignal('PyQt_PyObject')
     log_message = pyqtSignal('PyQt_PyObject')
 
@@ -369,12 +371,14 @@ class Command(QRunnable):
     def __init__(self):
         super().__init__()
         self.signals = CommandSignals()
+        self.time_taken_seconds = None
 
     def run(self):
         start_time = datetime.datetime.now()
         self.do_work()
         end_time = datetime.datetime.now()
-        self.signals.complete.emit((end_time - start_time).total_seconds())
+        self.time_taken_seconds = (end_time - start_time).total_seconds()
+        self.signals.__complete__.emit(self.time_taken_seconds)
 
     def do_work(self):
         pass
@@ -401,6 +405,11 @@ class CommandExecutionFactory(QThread):
             self.max_threads = self.thread_pool.maxThreadCount()
 
         self.log(f"Multi-threading with maximum of {self.max_threads} threads")
+
+    def add_task(self, task):
+        self.pending_jobs.append(task)
+        self.total_jobs += 1
+        self.run()
 
     def get_max_threads(self):
         return self.max_threads
@@ -436,7 +445,7 @@ class CommandExecutionFactory(QThread):
             for i in range(0, min(available_threads, len(self.pending_jobs))):
                 self.log("Dispatching thread on empty slot...")
                 runnable = self.pending_jobs.pop()
-                runnable.signals.complete.connect(self.thread_complete)
+                runnable.signals.__complete__.connect(self.thread_complete)
                 runnable.setAutoDelete(True)
                 # Execute
                 self.thread_pool.start(runnable)

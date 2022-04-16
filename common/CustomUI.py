@@ -2,8 +2,9 @@ import os
 import sys
 from os import path
 
-from PyQt5.QtCore import (QDir, Qt, QUrl, QParallelAnimationGroup, QPropertyAnimation, QAbstractAnimation, pyqtSignal)
-from PyQt5.QtGui import QDropEvent, QPalette, QDragLeaveEvent
+from PyQt5.QtCore import (QDir, Qt, QUrl, QParallelAnimationGroup, QPropertyAnimation, QAbstractAnimation, pyqtSignal,
+                          QModelIndex)
+from PyQt5.QtGui import QDropEvent, QPalette, QDragLeaveEvent, QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import \
     (QWidget,
      QLabel,
@@ -12,7 +13,7 @@ from PyQt5.QtWidgets import \
      QPushButton,
      QHBoxLayout,
      QApplication, QVBoxLayout, QListWidget, QListWidgetItem, QAbstractItemView, QScrollArea, QFrame, QToolButton,
-     QSizePolicy)
+     QSizePolicy, QComboBox, QStyledItemDelegate)
 
 
 class FileChooserTextBox(QWidget):
@@ -324,16 +325,77 @@ class QVLine(QFrame):
         self.setFrameShadow(QFrame.Sunken)
 
 
+class CheckComboBox(QComboBox):
+    """
+    Will draw a combobox with items that can be checked or unchecked
+    """
+
+    class ItemDelegate(QStyledItemDelegate):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+
+        def paint(self, painter, option, index):
+            option.showDecorationSelected = False
+            super().paint(painter, option, index)
+
+    def __init__(self, items=None, placeholder=None):
+        super(CheckComboBox, self).__init__()
+        self.setModel(QStandardItemModel())
+        if items:
+            for item in items:
+                self.add_item(item)
+        self.setItemDelegate(self.ItemDelegate())
+        self.setEditable(True)
+        self.placeholder = placeholder
+        self._update_edit_text()
+
+    def add_item(self, text, checked=False, ico=None):
+        item = QStandardItem(str(text))
+        if ico:
+            item.setIcon(ico)
+        item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+        state = Qt.Checked if checked else Qt.Unchecked
+        item.setData(state, Qt.CheckStateRole)
+        self.model().appendRow(item)
+        self.model().itemChanged.connect(self.item_changed)
+
+    def set_item_checked(self, text):
+        items = self.model().findItems(str(text))
+        for item in items:
+            item.setData(Qt.Checked, Qt.CheckStateRole)
+
+    def checked_items(self):
+        items = []
+        for idx in range(0, self.model().rowCount()):
+            index = self.model().index(idx, 0)
+            item = self.model().data(index)
+            if self.model().data(index, role=Qt.CheckStateRole) == Qt.Checked:
+                items.append(item)
+        return items
+
+    def item_changed(self, item):
+        self._update_edit_text()
+
+    def _update_edit_text(self):
+        self.lineEdit().setReadOnly(False)
+        text = ", ".join(self.checked_items())
+        if len(text) == 0:
+            self.lineEdit().setText(self.placeholder)
+        else:
+            self.lineEdit().setText(text)
+        self.lineEdit().setReadOnly(True)
+
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    ex = CollapsibleWidget("Test Widget Fooo", animation_duration=150)
-    lay = QVBoxLayout()
-    for j in range(8):
-        label = QLabel("This is label # {}".format(j))
-        label.setAlignment(Qt.AlignCenter)
-        lay.addWidget(label)
-    w = QWidget()
-    w.setLayout(lay)
-    ex.set_content_widget(w)
+    ex = CheckComboBox([1,2,3,5,4])
+    # lay = QVBoxLayout()
+    # for j in range(8):
+    #     label = QLabel("This is label # {}".format(j))
+    #     label.setAlignment(Qt.AlignCenter)
+    #     lay.addWidget(label)
+    # w = QWidget()
+    # w.setLayout(lay)
+    # ex.set_content_widget(w)
     ex.show()
     sys.exit(app.exec_())
