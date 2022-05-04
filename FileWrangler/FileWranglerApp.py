@@ -90,6 +90,7 @@ class FileWranglerApp(QMainWindow):
         self.copy_button.pressed.connect(partial(self.execute_merge, ActionKeys.copy.value))
         self.progress_bar = QProgressBar()
         self.date_checkbox = QCheckBox("Append Date (YYYY.MM.DD) to destination file")
+        self.delete_source_checkbox = QCheckBox("After move, delete Source directories if empty")
         self.dir_include = QSpinBox()
         self.dir_include.setMinimum(0)
         self.dir_include.setValue(0)
@@ -168,6 +169,7 @@ class FileWranglerApp(QMainWindow):
             sub_control_layout.addWidget(QLabel("Dir. names:  "))
             sub_control_layout.addWidget(self.dir_include)
             sub_control_layout.addWidget(self.date_checkbox)
+            sub_control_layout.addWidget(self.delete_source_checkbox)
             sub_control_layout.addWidget(QLabel(""), stretch=1)
 
             control_layout = QVBoxLayout()
@@ -251,8 +253,10 @@ class FileWranglerApp(QMainWindow):
         transfer_dialog.setMinimumWidth(550)
         transfer_dialog.setMaximumWidth(self.minimumWidth())
         transfer_dialog.show()
+        source_dirs = set()
         for item in file_items:
             source = item[DisplayKeys.source]
+            source_dirs.add(os.path.dirname(source))
             target = item[DisplayKeys.target]
             transfer_dialog.setValue(transfer_dialog.value() + 1)
             if self.table.is_selected(source):
@@ -274,6 +278,16 @@ class FileWranglerApp(QMainWindow):
         self.key_token_string.blockSignals(True)
         self.key_token_string.addItem(self.key_token_string.currentText())
         self.key_token_string.blockSignals(False)
+
+        # Delete Source dirs
+        if self.delete_source_checkbox.checkState() == Qt.Checked:
+            for _dir in source_dirs:
+                if not os.listdir(_dir):
+                    logger.info(f"Directory {_dir} is empty. Attempting to delete it")
+                    os.rmdir(_dir)
+                    logger.info(f"Directory {_dir} is empty. Attempting to delete it - Done")
+                else:
+                    logger.info(f"Directory {_dir} is not empty, so will not delete it")
 
 
 def main():
