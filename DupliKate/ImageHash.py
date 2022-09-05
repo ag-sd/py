@@ -1,3 +1,4 @@
+import os
 import random
 import sqlite3
 
@@ -5,7 +6,7 @@ import imagehash
 from PIL import Image
 from PyQt5.QtCore import QUrl, pyqtSignal, QThread, QRunnable, QThreadPool, QObject
 
-from ImagePlayApp import ImagePlayApp
+import CommonUtils
 from common.CommonUtils import FileScanner
 
 
@@ -15,11 +16,7 @@ class HashedImage:
         self.image_hash = image_hash
 
 
-class HashWorkerSignals(QObject):
-    result = pyqtSignal('PyQt_PyObject')
-
-
-class HashWorker(QRunnable):
+class HashWorker(CommonUtils.Command):
     result = pyqtSignal('PyQt_PyObject')
 
     def __init__(self, file, hash_size, algorithm):
@@ -27,15 +24,16 @@ class HashWorker(QRunnable):
         self.file = file
         self.hash_size = hash_size
         self.algorithm = algorithm
-        self.signals = HashWorkerSignals()
 
     def run(self):
         image = Image.open(self.file)
-        hashed = HashedImage(self.file, str(imagehash.average_hash(image, hash_size=self.hash_size)))
+        hash_ = str(imagehash.average_hash(image, hash_size=self.hash_size))
+        hashed = HashedImage(self.file, hash_)
+        print(f"{self.file} -> {hash_}")
         self.signals.result.emit(hashed)
 
 
-class DuplicateImageFinderRuntime(QThread):
+class DuplicateImageFinderRuntime:
     dupes_found_event = pyqtSignal(int, list)
     scan_status_event = pyqtSignal(str, int, int, int, int, int, int)
     scan_finish_event = pyqtSignal()
@@ -49,7 +47,7 @@ class DuplicateImageFinderRuntime(QThread):
         self.algorithm = algorithm
         self.stop = False
         self.status_counter = random.randint(5, 15)
-        self.thread_pool = QThreadPool()
+        self.executor = None
         self.connection, self.cursor = self._setup_database()
         self.cohort_counter = 0
         self.file_counter = 0
@@ -59,6 +57,9 @@ class DuplicateImageFinderRuntime(QThread):
 
     def run(self):
         self._start_duplicate_search2()
+
+    def test_foo(self, xyz):
+        print(xyz)
 
     def _process_file(self, hash_data):
         self.status_counter -= 1
@@ -91,6 +92,7 @@ class DuplicateImageFinderRuntime(QThread):
             files = []
             for row in self.cursor:
                 files.append(row[0])
+            print(f"Dupes found {cohort} -> {files}")
             self.dupes_found_event.emit(cohort, files)
 
         if self.status_counter == 0:
@@ -107,29 +109,48 @@ class DuplicateImageFinderRuntime(QThread):
             return
 
     def _start_duplicate_search2(self):
-        while len(self.files_to_scan) > 0:
-            if self.stop:
-                self._close_database()
-                self.scan_finish_event.emit()
-                return
-
-            file = self.files_to_scan.pop()
-            worker = HashWorker(file, self.hash_size, self.algorithm)
-            worker.signals.result.connect(self._process_file)
-            worker.setAutoDelete(True)
-            # Execute
-            self.thread_pool.start(worker)
-
-        self.thread_pool.waitForDone()
-        self.scan_status_event.emit("",
-                                    self.file_counter, self.scan_size,
-                                    self.thread_pool.activeThreadCount(),
-                                    self.thread_pool.maxThreadCount(),
-                                    0, 0)
-        self.scan_finish_event.emit()
+        runnables = []
+        for file in self.files_to_scan:
+            _, extension = os.path.splitext(file)
+            if extension.upper() not in [".JPG", ".JPEG", ".PNG", ".GIF"]:
+                print(f"Skipping file {file} as it is not an image file")
+            else:
+                worker = HashWorker(file, self.hash_size, self.algorithm)
+                worker.signals.result.connect(self.test_foo)
+                runnables.append(worker)
+        self.executor = CommonUtils.CommandExecutionFactory(runnables)
+        self.executor.start()
+        #
+        #
+        # while len(self.files_to_scan) > 0:
+        #     if self.stop:
+        #         self._close_database()
+        #         self.scan_finish_event.emit()
+        #         return
+        #
+        #     file = self.files_to_scan.pop()
+        #     _, extension = os.path.splitext(file)
+        #     if extension.upper() not in [".JPG", ".JPEG", ".PNG", ".GIF"]:
+        #         print(f"Skipping file {file} as it is not an image file")
+        #     else:
+        #         worker = HashWorker(file, self.hash_size, self.algorithm)
+        #         worker.signals.result.connect(self.test_foo)
+        #         self.executor = CommonUtils.CommandExecutionFactory
+        #         # Execute
+        #         self.thread_pool.start(worker)
+        #
+        # self.thread_pool.waitForDone()
+        # self.scan_status_event.emit("",
+        #                             self.file_counter, self.scan_size,
+        #                             self.thread_pool.activeThreadCount(),
+        #                             self.thread_pool.maxThreadCount(),
+        #                             0, 0)
+        # self.scan_finish_event.emit()
 
     def _setup_database(self):
-        connection = sqlite3.connect(':memory:')
+
+        # connection = sqlite3.connect(':memory:')
+        connection = sqlite3.connect("test_db.sqlite")
         cursor = connection.cursor()
         connection.create_function("hamming_dist", 2, self._hamming_distance)
         connection.row_factory = sqlite3.Row
@@ -169,13 +190,13 @@ def main():
     # https://docs.python.org/3/library/sqlite3.html#module-sqlite3
     # con = sqlite3.connect(':memory:')
 
-    files, start_file = ImagePlayApp.parse_args()
+    files = ["/mnt/Stuff/test/"]
     urls = []
     for file in files:
         urls.append(QUrl.fromLocalFile(file))
     found_files = FileScanner(urls, True, None).files
     # start_duplicate_search(con, found_files, 7, 2)
-    rt = DuplicateImageFinderRuntime(found_files, 8, 3, "foo")
+    rt = DuplicateImageFinderRuntime(found_files, 8, 8, "foo")
     rt.run()
 
 

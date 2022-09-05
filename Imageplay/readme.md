@@ -6,38 +6,26 @@ Imageplay lets you run a slide-show of a collection of images. The slide-show ru
 
 ### TO-DO
 - [x] Drag and drop images to start a slide-show
+- [x] Ctrl + drop adds to the list
+- [ ] Delete removes from the list  
 - [x] Choose a folder as image source
 - [x] Play GIF images frame-by-frame
 - [x] Play in Order / Random. 
 - [x] Loop / Stop at end of list
-- [x] Crop images
-- [ ] Resize images
-- [ ] Rotate images
-- [ ] Color images
+- [ ] ~~Crop images~~
+- [ ] ~~Resize images~~
+- [ ] ~~Rotate images~~
 - [x] Display image properties
-- [ ] Duplicate Image Finder // TODO-Flesh out
-- [ ] Library Tools
-- [ ] Save an image playlist
-- [ ] Filter images by dimension, color etc.
-- [x] Unit Tests
-- [x] Playlist to use a stack
-- [ ] Fine tuned zoom in and zoom out
+- [x] Open file in external app
 
-###Duplicate Finder TODO
-- [ ] Add an option to have a reference Database to compare new files only
-- [ ] Add a report with the number of files to be deleted by directory
-- [ ] Add an ergonomic tool to confirm Auto-Selections, actions applies only on confirmed pictures
-- [ ] Display the larger images side by side for comparison
-- [ ] Improve the internal database's index algorythm to increase speed
-- [ ] Improve the auto-select options
-- [ ] Improve the comparison engine's memory managment to increase speed
-- [ ] Fix and improve the thumbnails display engine (including Thumbsize, and a label/filesize/resolution)
-- [ ] Fix and improve the projects engine 
-- [ ] Add a count of the number of pictures being deleted/moved in the dialog
-- [ ] Add a small display on the thumbnail: format, resolution and size
-- [ ] Add which program is used to open a container### Changelog
-- [ ] Fix groups shouldn't disapear if only one image remains after a move
--b /media/sheldon/Stuff/test/image.jpeg
+- [ ] ~~Library Tools~~
+- [ ] Save an image playlist
+- [x] Unit Tests
+- [ ] ~~Color images~~
+
+**Fri Apr 2021**
+- Significant re-write
+
 **Wed Mar 20 23:50:00 EDT 2019**
 - Duplicate Image Finder Multi-Threaded performance optimisations
 - Improved image display grid for duplicate images

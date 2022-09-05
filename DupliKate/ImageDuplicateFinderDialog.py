@@ -8,8 +8,8 @@ import Imageplay
 from Imageplay import SettingsKeys
 from common.CommonUtils import FileScanner
 from common.CustomUI import FileChooserListBox
-from model.ThumbnailGrid import ThumbnailView
-from runtime.ImageHash import DuplicateImageFinderRuntime
+from DupliKate.ThumbnailGrid import ThumbnailView
+from DupliKate.ImageHash import DuplicateImageFinderRuntime
 
 
 class ImageDuplicateFinderDialog(QDialog):
