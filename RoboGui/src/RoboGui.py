@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (QWidget,
                              QPushButton,
                              QMessageBox)
 
-from CustomUI import FileChooser
+from CustomUI import FileChooserTextBox
 from RobocopySwitches import allSwitches
 from Utils import CommandRunner
 
@@ -48,9 +48,9 @@ class RoboGUI(QWidget):
 
     def setup_file_chooser(self):
         layout = QGridLayout()
-        source = FileChooser("Source", "Select Source", True)
+        source = FileChooserTextBox("Source", "Select Source", True)
         source.setObjectName("Source Directory")
-        target = FileChooser("Target", "Select Target", True)
+        target = FileChooserTextBox("Target", "Select Target", True)
         target.setObjectName("Target Directory")
         layout.addWidget(source, 1, 0)
         layout.addWidget(target, 2, 0)
@@ -90,7 +90,7 @@ class RoboGUI(QWidget):
                 entry += 1
             elif option.find(":file") > 0:
                 # File Browser
-                widget = FileChooser(key_options[option], key_options[option], False)
+                widget = FileChooserTextBox(key_options[option], key_options[option], False)
                 entrygrid.addWidget(widget, entry, 0)
                 option = option[:option.find(":") + 1]  # Strip directives
                 entry += 1
@@ -139,7 +139,7 @@ class RoboGUI(QWidget):
                 if child.isChecked():
                     command = command + " " + child.property("option")
             # File Chooser
-            elif type(child) is FileChooser:
+            elif type(child) is FileChooserTextBox:
                 if child.getSelection() != '':
                     command = command + " " + \
                               child.property("option") + child.getSelection()
@@ -153,7 +153,7 @@ class RoboGUI(QWidget):
 
     @staticmethod
     def get_path(name, container):
-        widget = container.findChildren(FileChooser, name=name)
+        widget = container.findChildren(FileChooserTextBox, name=name)
         path = widget[0].getSelection()
         if not path:
             error = str("%s is not specified" % name)
