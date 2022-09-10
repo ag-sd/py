@@ -1,7 +1,3 @@
-from FileWrangler.FileWranglerCore import ConfigKeys, _DEFAULT_REGEX, _create_key, DEFAULT_SPLITTER, UNKNOWN_KEY, \
-    KeyType
-
-
 # def test__create_key_simple_regex():
 #     file = "123 - 345 - 123.jpg"
 #     config = {

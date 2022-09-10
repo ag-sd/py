@@ -23,12 +23,8 @@ class DisplayKeys(Enum):
 
 class ConfigKeys(Enum):
     append_date = 0
-    key_token_string = 1
     key_type = 2
-    key_token_count = 4
     sort_by = 5
-    dir_include = 6
-
     context = 7
     is_version_2 = 8
     operation = 9
@@ -39,13 +35,6 @@ class SortBy(Enum):
     date = 2
     size = 3
     none = 4
-
-
-class KeyType(Enum):
-    regular_expression = "Regular Expression"
-    separator = "Separator"
-    replacement = "Replace Completely"
-    directory = "Use Directory Name"
 
 
 class ActionKeys(Enum):
@@ -146,36 +135,8 @@ def _update_dict(file, _dict, key):
 def _create_key(file, config):
     if ConfigKeys.is_version_2 in config:
         return _create_key_v2(file, config)
-
-    # _, file_name = os.path.split(file)
-    #
-    # if config[ConfigKeys.key_type] == KeyType.regular_expression:
-    #     tokens = re.findall(config[ConfigKeys.key_token_string], file_name)
-    #     splitter = DEFAULT_SPLITTER
-    # elif config[ConfigKeys.key_type] == KeyType.separator:
-    #     tokens = file_name.split(config[ConfigKeys.key_token_string])
-    #     splitter = config[ConfigKeys.key_token_string]
-    # elif config[ConfigKeys.key_type] == KeyType.directory:
-    #     tokens = _create_tokens_from_parent_dir(file)
-    #     splitter = DEFAULT_SPLITTER
-    # else:
-    #     tokens = [config[ConfigKeys.key_token_string]]
-    #     splitter = None
-    #
-    # if config[ConfigKeys.key_type] == KeyType.replacement:
-    #     key_base = tokens[0]
-    # elif len(tokens) >= config[ConfigKeys.key_token_count]:
-    #     key_base = splitter.join(tokens[:config[ConfigKeys.key_token_count]])
-    # else:
-    #     return UNKNOWN_KEY
-    #
-    # if ConfigKeys.append_date in config:
-    #     if config[ConfigKeys.append_date]:
-    #         return f"{key_base}{DEFAULT_SPLITTER}{datetime.now().strftime('%Y-%m-%d')}"
-    #     else:
-    #         return f"{key_base}"
-    # else:
-    #     return UNKNOWN_KEY
+    else:
+        raise NotImplementedError("V1 is discontinued")
 
 
 def _create_key_v2(file, config):
@@ -195,24 +156,6 @@ def _create_key_v2(file, config):
     else:
         return UNKNOWN_KEY
 
-
-# def _create_tokens_from_parent_dir(file):
-#     path, _ = os.path.split(file)
-#     _, parent = os.path.split(path)
-#     norm_parent = os.path.normpath(parent)
-#     # Normalize any in keywords
-#     if "in" in norm_parent:
-#         norm_parent = norm_parent.replace("in", DEFAULT_SPLITTER, 1)
-#     return norm_parent.split(DEFAULT_SPLITTER)
-
-# def _create_dir_prefix(file, config):
-#     if config[ConfigKeys.dir_include] == 0:
-#         return EMPTY_STR
-#
-#     path, _ = os.path.split(file)
-#     norm_path = os.path.normpath(path)
-#     path_keys = norm_path.split(os.sep)[-config[ConfigKeys.dir_include]:]
-#     return f"{DEFAULT_SPLITTER}{DEFAULT_SPLITTER.join(path_keys)}"
 
 class RenameUIOperation(QObject):
     """
