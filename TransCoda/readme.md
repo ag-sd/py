@@ -34,7 +34,7 @@ Trans:Coda lets you convert media from one format to another
 - [ ] If media kbps < min of encoder, just copy the file over
 - [x] Copy everything else from the source folder that's not a media file
   - [x] Add ability to configure this
-- [ ] Profiles
+- [x] Profiles - Different encoder options 
 - [ ] Configure option to load metadata  
 - [ ] Split and encode Cue files: 
   - https://unix.stackexchange.com/questions/10251/how-do-i-split-a-flac-with-a-cue
@@ -49,6 +49,7 @@ Trans:Coda lets you convert media from one format to another
 - [x] Open source folder
 - [x] Open destination folder
 - [x] Open Item
+- [ ] Use common system theme class instead of custom implementation
 
 - [x] Extended format support<br>
   - [x] .aac<br>

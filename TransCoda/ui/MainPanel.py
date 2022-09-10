@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QTableView, QAbstractItemView, QMenu, QStyledItemDel
 
 import CommonUtils
 import TransCoda
-from TransCoda.ui import File, TransCodaSettings
+from TransCoda.ui import TransCodaSettings
 from TransCoda.ui.Actions import Action
 from TransCoda.ui.File import FileItemModel, Header
 from TransCoda.ui.TransCodaSettings import SettingsKeys
