@@ -1,12 +1,18 @@
 import os
 import re
+import traceback
 from datetime import datetime
 from enum import Enum
 
-from CommonUtils import FileScanner
+from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtWidgets import QBoxLayout, QComboBox, QWidget
 
-_UNKNOWN_KEY = "Unknown"
-_DEFAULT_SPLITTER = " - "
+from CommonUtils import FileScanner
+from FileWrangler import logger
+
+UNKNOWN_KEY = "Unknown"
+DEFAULT_SPLITTER = " - "
+EMPTY_STR = ""
 _DEFAULT_REGEX = ".+?(?= - )"
 
 
@@ -23,6 +29,10 @@ class ConfigKeys(Enum):
     sort_by = 5
     dir_include = 6
 
+    context = 7
+    is_version_2 = 8
+    operation = 9
+
 
 class SortBy(Enum):
     name = 1
@@ -32,14 +42,16 @@ class SortBy(Enum):
 
 
 class KeyType(Enum):
-    regular_expression = 1
-    separator = 2
-    replacement = 3
+    regular_expression = "Regular Expression"
+    separator = "Separator"
+    replacement = "Replace Completely"
+    directory = "Use Directory Name"
 
 
 class ActionKeys(Enum):
     copy = "Copy"
     move = "Move"
+    help = "Help"
 
 
 def create_merge_tree(files, target_directory, config):
@@ -115,13 +127,11 @@ def _sort_files(files, config):
 def _create_destination_keymap(files, config):
     _dict = {}
     for file in files:
-        if file == "":
+        if file == EMPTY_STR:
             continue
         key = _create_key(file, config)
         _, file_name = os.path.split(file)
-        dir_prefix = _create_dir_prefix(file, config)
-        with_dir_prefix = f"{file_name}{dir_prefix}"
-        if with_dir_prefix.startswith(key):
+        if file_name.startswith(key):
             _update_dict(file, _dict, key)
     return _dict
 
@@ -134,40 +144,198 @@ def _update_dict(file, _dict, key):
 
 
 def _create_key(file, config):
-    _, file_name = os.path.split(file)
-    dir_prefix = _create_dir_prefix(file, config)
+    if ConfigKeys.is_version_2 in config:
+        return _create_key_v2(file, config)
 
-    if config[ConfigKeys.key_type] == KeyType.regular_expression:
-        tokens = re.findall(config[ConfigKeys.key_token_string], file_name)
-        splitter = _DEFAULT_SPLITTER
-    elif config[ConfigKeys.key_type] == KeyType.separator:
-        tokens = file_name.split(config[ConfigKeys.key_token_string])
-        splitter = config[ConfigKeys.key_token_string]
-    else:
-        tokens = [config[ConfigKeys.key_token_string]]
-        splitter = None
+    # _, file_name = os.path.split(file)
+    #
+    # if config[ConfigKeys.key_type] == KeyType.regular_expression:
+    #     tokens = re.findall(config[ConfigKeys.key_token_string], file_name)
+    #     splitter = DEFAULT_SPLITTER
+    # elif config[ConfigKeys.key_type] == KeyType.separator:
+    #     tokens = file_name.split(config[ConfigKeys.key_token_string])
+    #     splitter = config[ConfigKeys.key_token_string]
+    # elif config[ConfigKeys.key_type] == KeyType.directory:
+    #     tokens = _create_tokens_from_parent_dir(file)
+    #     splitter = DEFAULT_SPLITTER
+    # else:
+    #     tokens = [config[ConfigKeys.key_token_string]]
+    #     splitter = None
+    #
+    # if config[ConfigKeys.key_type] == KeyType.replacement:
+    #     key_base = tokens[0]
+    # elif len(tokens) >= config[ConfigKeys.key_token_count]:
+    #     key_base = splitter.join(tokens[:config[ConfigKeys.key_token_count]])
+    # else:
+    #     return UNKNOWN_KEY
+    #
+    # if ConfigKeys.append_date in config:
+    #     if config[ConfigKeys.append_date]:
+    #         return f"{key_base}{DEFAULT_SPLITTER}{datetime.now().strftime('%Y-%m-%d')}"
+    #     else:
+    #         return f"{key_base}"
+    # else:
+    #     return UNKNOWN_KEY
 
-    if config[ConfigKeys.key_type] == KeyType.replacement:
-        key_base = tokens[0]
-    elif len(tokens) >= config[ConfigKeys.key_token_count]:
-        key_base = splitter.join(tokens[:config[ConfigKeys.key_token_count]])
-    else:
-        return _UNKNOWN_KEY
+
+def _create_key_v2(file, config):
+    operation = config[ConfigKeys.operation]
+    try:
+        key_base = operation.get_key(file, config)
+    except Exception as e:
+        logger.exception("Something awful happened!")
+        traceback.print_exc()
+        key_base = UNKNOWN_KEY
 
     if ConfigKeys.append_date in config:
         if config[ConfigKeys.append_date]:
-            return f"{key_base}{dir_prefix}{_DEFAULT_SPLITTER}{datetime.now().strftime('%Y-%m-%d')}"
+            return f"{key_base}{DEFAULT_SPLITTER}{datetime.now().strftime('%Y-%m-%d')}"
         else:
-            return f"{key_base}{dir_prefix}"
+            return f"{key_base}"
     else:
-        return _UNKNOWN_KEY
+        return UNKNOWN_KEY
 
 
-def _create_dir_prefix(file, config):
-    if config[ConfigKeys.dir_include] == 0:
-        return ""
+# def _create_tokens_from_parent_dir(file):
+#     path, _ = os.path.split(file)
+#     _, parent = os.path.split(path)
+#     norm_parent = os.path.normpath(parent)
+#     # Normalize any in keywords
+#     if "in" in norm_parent:
+#         norm_parent = norm_parent.replace("in", DEFAULT_SPLITTER, 1)
+#     return norm_parent.split(DEFAULT_SPLITTER)
 
-    path, _ = os.path.split(file)
-    norm_path = os.path.normpath(path)
-    path_keys = norm_path.split(os.sep)[-config[ConfigKeys.dir_include]:]
-    return f"{_DEFAULT_SPLITTER}{_DEFAULT_SPLITTER.join(path_keys)}"
+# def _create_dir_prefix(file, config):
+#     if config[ConfigKeys.dir_include] == 0:
+#         return EMPTY_STR
+#
+#     path, _ = os.path.split(file)
+#     norm_path = os.path.normpath(path)
+#     path_keys = norm_path.split(os.sep)[-config[ConfigKeys.dir_include]:]
+#     return f"{DEFAULT_SPLITTER}{DEFAULT_SPLITTER.join(path_keys)}"
+
+class RenameUIOperation(QObject):
+    """
+    All core file rename operations need to extend this class
+    """
+    merge_event = pyqtSignal(int)
+
+    def __init__(self, name, description):
+        super().__init__()
+        self.name = name
+        self.description = description
+
+    def get_widget(self) -> QWidget:
+        widget = QWidget()
+        layout = self._get_layout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        widget.setLayout(layout)
+        return widget
+
+    def is_ready(self) -> bool:
+        """
+        Returns true if the Operation has all the data needed to begin file rename operations
+        """
+        pass
+
+    def get_key(self, file_name, config) -> str:
+        """
+        Returns the key of the file with the given config.context
+        Args:
+            file_name: The filename
+            config: The config to use
+
+        Returns: A key based on the config.context and file
+
+        """
+        self.validate_correct_operation(op_name=self.name, key_type=config[ConfigKeys.key_type])
+        return self._get_key(file_name, config)
+
+    def get_help(self):
+        """
+        Returns: Help associated with this rename operations
+        """
+        return f"<H2>{self.name}</H2><p>{self.description}</p>"
+
+    def get_context(self) -> dict:
+        """
+        Returns: A dict with all the data needed for the Operation to change a file name
+        """
+        pass
+
+    def show_help(self) -> str:
+        """
+        Returns: A formatted string with help details
+        """
+        pass
+
+    def save_state(self):
+        """
+        Convenience function to enable file oeprations to save their state for next time.
+        Note, states are not saved across sessions
+        Returns: Nothing
+
+        """
+        pass
+
+    def _get_layout(self) -> QBoxLayout:
+        pass
+
+    def _get_key(self, file_name, config) -> str:
+        """
+        Returns the key of the file with the given config.context
+        Args:
+            file_name: The filename
+            config: The config to use
+
+        Returns: A key based on the config.context and file
+
+        """
+        pass
+
+    def _emit_merge_event(self):
+        self.merge_event.emit(0)
+
+    @staticmethod
+    def _none_or_empty(text):
+        return text is None or text == EMPTY_STR
+
+    @staticmethod
+    def validate_correct_operation(op_name, key_type):
+        if key_type != op_name:
+            raise TypeError(f"{op_name} cannot create key for {key_type}")
+
+    @staticmethod
+    def _get_editable_combo(current_text=EMPTY_STR) -> QComboBox:
+        combobox = QComboBox()
+        combobox.setEditable(True)
+        combobox.setInsertPolicy(QComboBox.InsertAtTop)
+        combobox.setCurrentText(current_text)
+        return combobox
+
+    @staticmethod
+    def _save_combo_current_text(combobox: QComboBox):
+        combobox.blockSignals(True)
+        combobox.addItem(combobox.currentText())
+        combobox.blockSignals(False)
+
+
+def get_file_operations() -> dict:
+    """
+    Returns a list of file operations avaialble to the user. This list is wrapped inside a method to allow
+    a QApplication to be created before the file operations are called for
+    Returns: a list of file operations
+
+    """
+
+    from FileWrangler.fileops.CompletelyReplace import CompletelyReplaceUIOperation
+    from FileWrangler.fileops.Separator import SeparatorUIOperation
+    from FileWrangler.fileops.PatternFinding import PatternExtractingUIOperation
+    from FileWrangler.fileops.PathComponents import PathComponentsUIOperation
+    operations = [
+        CompletelyReplaceUIOperation(),
+        SeparatorUIOperation(),
+        PatternExtractingUIOperation(),
+        PathComponentsUIOperation()
+    ]
+    return {x.name: x for x in operations}

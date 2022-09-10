@@ -1,137 +1,96 @@
 import os
-import re
 import shutil
 import sys
 from functools import partial
 
-from PyQt5.QtCore import Qt, QCoreApplication, QMimeDatabase
-from PyQt5.QtGui import QIcon, QBrush, QColor
+from PyQt5.QtCore import Qt, QCoreApplication
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QHBoxLayout, \
-    QProgressBar, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QLabel, QProgressDialog, \
-    QRadioButton, QSpinBox, QComboBox, QGroupBox
+    QCheckBox, QLabel, QProgressDialog, \
+    QRadioButton, QGroupBox, QStackedLayout, QMessageBox
 
-from CustomUI import FileChooserTextBox, QVLine, DropZone
-from FileWrangler import logger
-from FileWrangler.FileWranglerCore import ActionKeys, DisplayKeys, ConfigKeys, create_merge_tree, _UNKNOWN_KEY, \
-    _DEFAULT_REGEX, KeyType, SortBy
-
-
-class MainTable(QTableWidget):
-    _error_brush = QBrush(QColor(220, 20, 60, 75))
-    _mime_database = QMimeDatabase()
-
-    def __init__(self):
-        super().__init__()
-        self._reset()
-        self.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.verticalHeader().setDefaultSectionSize(self.verticalHeader().fontMetrics().height() + 3)
-        self.verticalHeader().hide()
-        self.horizontalHeader().setHighlightSections(False)
-        self.horizontalHeader().setSectionsMovable(True)
-        self.horizontalHeader().setSectionsClickable(True)
-        self.setSortingEnabled(True)
-        self.model = None
-
-    def is_selected(self, source_file):
-        matches = self.findItems(source_file, Qt.MatchExactly)
-        if len(matches):
-            return matches[0].checkState() == Qt.Checked
-        else:
-            return False
-
-    def remove_file(self, source_file):
-        matches = self.findItems(source_file, Qt.MatchExactly)
-        if len(matches):
-            self.removeRow(matches[0].row())
-
-    def set_model(self, file_items):
-        self._reset()
-        self.setRowCount(len(file_items))
-        self.setSortingEnabled(False)
-        for i in range(0, len(file_items)):
-            source = file_items[i][DisplayKeys.source]
-            target = file_items[i][DisplayKeys.target]
-            source_item = QTableWidgetItem(source)
-            target_item = QTableWidgetItem(target)
-            mime = MainTable._mime_database.mimeTypesForFileName(source)
-            if len(mime):
-                source_item.setIcon(QIcon.fromTheme(mime[0].iconName()))
-            else:
-                logger.error("Unable to determine mime type for " + source)
-                source_item.setIcon(QIcon.fromTheme("text-x-generic"))
-            source_item.setCheckState(Qt.Checked)
-            _, file_name = os.path.split(target)
-            if file_name.startswith(_UNKNOWN_KEY):
-                target_item.setBackground(MainTable._error_brush)
-                source_item.setBackground(MainTable._error_brush)
-                source_item.setCheckState(Qt.Unchecked)
-            self.setItem(i, 0, source_item)
-            self.setItem(i, 1, target_item)
-        self.setSortingEnabled(True)
-        self.model = file_items
-
-    def _reset(self):
-        self.clear()
-        self.setColumnCount(2)
-        self.setHorizontalHeaderItem(0, QTableWidgetItem("Source File"))
-        self.setHorizontalHeaderItem(1, QTableWidgetItem("Destination File"))
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+import FileWrangler
+from CustomUI import FileChooserTextBox, DropZone
+from FileWrangler import logger, FileWranglerCore
+from FileWrangler.FileWranglerCore import ActionKeys, DisplayKeys, ConfigKeys, create_merge_tree, SortBy
+from FileWrangler.UIComponents import MainTable, FileOperationSelector
+from Theme import Theme
 
 
 class FileWranglerApp(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.theme = Theme(default_theme_dir=os.path.join(os.path.dirname(__file__), "resources/theme"))
+
         self.targetDir = FileChooserTextBox("Destination: ", "Select destination directory", True)
 
+        # File Copy Operations
         self.move_button = QPushButton(ActionKeys.move.value)
-        self.move_button.pressed.connect(partial(self.execute_merge, ActionKeys.move.value))
+        self.move_button.setIcon(self.theme.fromTheme("edit-move"))
         self.copy_button = QPushButton(ActionKeys.copy.value)
-        self.copy_button.pressed.connect(partial(self.execute_merge, ActionKeys.copy.value))
-        self.progress_bar = QProgressBar()
+        self.copy_button.setIcon(self.theme.fromTheme("edit-copy"))
+        self.help_button = QPushButton(ActionKeys.help.value)
+        self.help_button.setIcon(self.theme.fromTheme("help-contents"))
+
+        # File Name Operations
         self.date_checkbox = QCheckBox("Append Date (YYYY.MM.DD) to destination file")
         self.delete_source_checkbox = QCheckBox("After move, delete Source directories if empty")
-        self.dir_include = QSpinBox()
-        self.dir_include.setMinimum(0)
-        self.dir_include.setValue(0)
-        self.dir_include.setMaximum(10)
+        self.file_operations_widget = QGroupBox()
+        self.file_operations_widget.setContentsMargins(0, 0, 0, 0)
+        self.file_operation_selector = FileOperationSelector(FileWranglerCore.get_file_operations())
+        self.file_operation_selector.setEditable(False)
+        self.dry_run_checkbox = QCheckBox("Dry Run")
+        self.dry_run_checkbox.setChecked(True)
+
+        # File Display Operations
         self.sort_name = QRadioButton("Name")
         self.sort_name.setChecked(True)
         self.sort_date = QRadioButton("Date")
         self.sort_size = QRadioButton("Size")
         self.sort_none = QRadioButton("None")
-        self.key_token_string = QComboBox()
-        self.key_token_string.setEditable(True)
-        self.key_token_string.setInsertPolicy(QComboBox.InsertAtTop)
-        self.key_token_string.setCurrentText(_DEFAULT_REGEX)
-        self.key_separator = QRadioButton("Separator")
-        self.key_regex = QRadioButton("Regular Expression")
-        self.key_regex.setChecked(True)
-        self.key_replace = QRadioButton("Completely Replace")
-        self.key_match_counter = QSpinBox()
-        self.key_match_counter.setMinimum(1)
-        self.key_match_counter.setValue(1)
-        self.key_match_counter.setMaximum(10)
         self.dropZone = DropZone()
 
-        self.key_match_counter.valueChanged.connect(self.create_merge)
-        self.dir_include.valueChanged.connect(self.create_merge)
+        self.table = MainTable()
+
+        self.init_events()
+        self.init_ui()
+
+    def init_events(self):
         self.dropZone.files_dropped_event.connect(self.create_merge)
-        self.key_token_string.editTextChanged.connect(self.create_merge)
-        self.key_regex.released.connect(partial(self.create_merge))
-        self.key_replace.released.connect(partial(self.create_merge))
-        self.key_separator.released.connect(partial(self.create_merge))
-        self.date_checkbox.stateChanged.connect(self.create_merge)
+        self.move_button.pressed.connect(partial(self.execute_action, ActionKeys.move))
+        self.copy_button.pressed.connect(partial(self.execute_action, ActionKeys.copy))
+        self.help_button.pressed.connect(partial(self.execute_action, ActionKeys.help))
         self.targetDir.file_selection_changed.connect(self.create_merge)
+        self.date_checkbox.stateChanged.connect(self.create_merge)
+        self.delete_source_checkbox.stateChanged.connect(self.create_merge)
+        self.file_operation_selector.currentIndexChanged.connect(self._create_file_operation_widget)
         self.sort_date.released.connect(partial(self.create_merge))
         self.sort_name.released.connect(partial(self.create_merge))
         self.sort_size.released.connect(partial(self.create_merge))
         self.sort_none.released.connect(partial(self.create_merge))
-        self.table = MainTable()
-        self.init_ui()
 
     def init_ui(self):
-        def create_dropzone_groupbox():
+        self._create_file_operation_layouts()
+        self._create_file_operation_widget()
+
+        main_layout = QVBoxLayout()
+        main_layout.addLayout(self._create_top_layout())
+        main_layout.addWidget(self.table, stretch=1)
+        main_layout.setContentsMargins(2, 2, 2, 2)
+
+        dummy_widget = QWidget()
+        dummy_widget.setLayout(main_layout)
+        self.setCentralWidget(dummy_widget)
+
+        self.help_button.setMaximumHeight(self.file_operation_selector.height())
+
+        self.setWindowIcon(self.theme.fromTheme("app_icon", use_system_fallback=False))
+        self.setWindowTitle('File Wrangler')
+        self.setMinimumWidth(1724)
+        self.setMinimumHeight(768)
+        self.show()
+
+    def _create_top_layout(self):
+        def _create_dropzone_groupbox():
             dropzone_sort_layout = QHBoxLayout()
             dropzone_sort_layout.addWidget(QLabel("Order By"))
             dropzone_sort_layout.addWidget(self.sort_name)
@@ -140,71 +99,72 @@ class FileWranglerApp(QMainWindow):
             dropzone_sort_layout.addWidget(self.sort_none)
             dropzone_layout = QVBoxLayout()
             dropzone_layout.addWidget(self.dropZone)
-            dropzone_layout.addLayout(dropzone_sort_layout)
             dropzone_layout.setContentsMargins(0, 0, 0, 0)
+            dropzone_layout.addLayout(dropzone_sort_layout)
+            return dropzone_layout
 
-            groupbox = QGroupBox()
-            groupbox.setLayout(dropzone_layout)
-            return groupbox
+        def _create_control_groupbox():
 
-        def create_rename_controlbox():
-            self.move_button.setIcon(QIcon.fromTheme("edit-paste"))
-            self.copy_button.setIcon(QIcon.fromTheme("edit-copy"))
+            op_layout = QHBoxLayout()
+            op_layout.addWidget(self.file_operation_selector, stretch=2)
+            op_layout.addWidget(self.help_button)
 
-            button_layout = QHBoxLayout()
-            button_layout.addWidget(QLabel(""), stretch=1)
-            button_layout.addWidget(self.move_button)
-            button_layout.addWidget(self.copy_button)
+            operation_layout = QVBoxLayout()
+            operation_layout.addWidget(self.targetDir)
+            operation_layout.addLayout(op_layout)
+            operation_layout.addWidget(self.file_operations_widget)
+            operation_layout.setContentsMargins(0, 0, 0, 0)
 
-            key_layout = QHBoxLayout()
-            key_layout.addWidget(QLabel("Match Key:   "))
-            key_layout.addWidget(self.key_match_counter)
-            key_layout.addWidget(QLabel("Key Identifier"))
-            key_layout.addWidget(self.key_token_string, stretch=1)
-            key_layout.addWidget(self.key_regex)
-            key_layout.addWidget(self.key_separator)
-            key_layout.addWidget(self.key_replace)
-
-            sub_control_layout = QHBoxLayout()
-            sub_control_layout.addWidget(QLabel("Dir. names:  "))
-            sub_control_layout.addWidget(self.dir_include)
-            sub_control_layout.addWidget(self.date_checkbox)
-            sub_control_layout.addWidget(self.delete_source_checkbox)
-            sub_control_layout.addWidget(QLabel(""), stretch=1)
+            additional_file_operations = QHBoxLayout()
+            additional_file_operations.addWidget(QWidget(), stretch=1)
+            additional_file_operations.addWidget(self.date_checkbox)
+            additional_file_operations.addWidget(self.delete_source_checkbox)
 
             control_layout = QVBoxLayout()
-            control_layout.addWidget(self.targetDir)
-            control_layout.addLayout(key_layout)
-            control_layout.addLayout(sub_control_layout)
-            # control_layout.addWidget(QLabel(""))
-            control_layout.addLayout(button_layout)
+            control_layout.setContentsMargins(0, 0, 0, 0)
+            control_layout.setSpacing(0)
+            control_layout.addLayout(operation_layout)
+            control_layout.addLayout(additional_file_operations)
+            return control_layout
 
+        def _create_button_layout():
+            layout = QVBoxLayout()
+            layout.addWidget(QWidget(), stretch=1)
+            layout.addWidget(self.dry_run_checkbox)
+            layout.addWidget(self.move_button)
+            layout.addWidget(self.copy_button)
+            return layout
+
+        def _wrap(layout):
             groupbox = QGroupBox()
-            groupbox.setLayout(control_layout)
+            groupbox.setLayout(layout)
             return groupbox
 
         top_layout = QHBoxLayout()
-        top_layout.addWidget(create_dropzone_groupbox())
-        top_layout.addWidget(QVLine())
-        top_layout.addWidget(create_rename_controlbox())
+        top_layout.addWidget(_wrap(_create_dropzone_groupbox()))
+        top_layout.addWidget(_wrap(_create_control_groupbox()))
+        top_layout.addWidget(_wrap(_create_button_layout()))
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        return top_layout
 
-        main_layout = QVBoxLayout()
-        main_layout.addLayout(top_layout)
-        main_layout.addWidget(self.table)
-        main_layout.setContentsMargins(2, 2, 2, 2)
+    def _create_file_operation_layouts(self):
+        stacked_layout = QStackedLayout()
+        for op_index in range(self.file_operation_selector.count()):
+            op = self.file_operation_selector.operation_at(op_index)
+            stacked_layout.addWidget(op.get_widget())
+        self.file_operations_widget.setLayout(stacked_layout)
 
-        dummy_widget = QWidget()
-        dummy_widget.setLayout(main_layout)
-        self.setCentralWidget(dummy_widget)
-
-        self.setWindowTitle('File Wrangler')
-        self.setMinimumWidth(1724)
-        self.setMinimumHeight(768)
-        self.show()
+    def _create_file_operation_widget(self):
+        op = self.file_operation_selector.selected_operation()
+        op.merge_event.connect(self.create_merge)
+        self.file_operations_widget.layout().setCurrentIndex(self.file_operation_selector.currentIndex())
 
     def create_merge(self):
-        token_string = self.key_token_string.currentText()
-        if token_string is None or token_string == "":
+        if self.file_operation_selector.selected_operation() is None:
+            logger.warning("Current Operation hasn't been selected yet")
+            return
+        elif not self.file_operation_selector.selected_operation().is_ready():
+            logger.warning("Current Operation is not ready")
             return
 
         sort_key = SortBy.none
@@ -217,23 +177,12 @@ class FileWranglerApp(QMainWindow):
 
         config = {
             ConfigKeys.append_date: self.date_checkbox.isChecked(),
-            ConfigKeys.key_token_string: self.key_token_string.currentText(),
-            ConfigKeys.key_token_count: self.key_match_counter.value(),
             ConfigKeys.sort_by: sort_key,
-            ConfigKeys.dir_include: self.dir_include.value()
+            ConfigKeys.key_type: self.file_operation_selector.selected_operation().name,
+            ConfigKeys.context: self.file_operation_selector.selected_operation().get_context(),
+            ConfigKeys.is_version_2: True,
+            ConfigKeys.operation: self.file_operation_selector.selected_operation()
         }
-
-        if self.key_regex.isChecked():
-            try:
-                re.compile(self.key_token_string.currentText())
-                config[ConfigKeys.key_type] = KeyType.regular_expression
-            except re.error:
-                logger.error("Regular expression error")
-                return
-        elif self.key_replace.isChecked():
-            config[ConfigKeys.key_type] = KeyType.replacement
-        else:
-            config[ConfigKeys.key_type] = KeyType.separator
 
         try:
             model = create_merge_tree(self.dropZone.dropped_files, self.targetDir.getSelection(), config)
@@ -242,57 +191,76 @@ class FileWranglerApp(QMainWindow):
         except FileNotFoundError as fne:
             logger.error(f"File not found {fne.filename}")
 
-    def execute_merge(self, action):
-        file_items = self.table.model
+    def execute_action(self, action):
+        match action:
+            case ActionKeys.help:
+                QMessageBox.about(self, FileWrangler.__APP_NAME__,
+                                  self.file_operation_selector.selected_operation().get_help())
+            case _:
+                # Disable any input operations
+                file_items = self.table.model
+                transfer_dialog = self._create_transfer_dialog(action.name, len(file_items))
+                source_dirs = set()
+                for item in file_items:
+                    source = item[DisplayKeys.source]
+                    source_dirs.add(os.path.dirname(source))
+                    target = item[DisplayKeys.target]
+                    transfer_dialog.setValue(transfer_dialog.value() + 1)
+                    if self.table.is_selected(source):
+                        target_path, _ = os.path.split(target)
+                        if not os.path.exists(target_path):
+                            logger.error(f"CANNOT {action.name.upper()}: {source} -> {target} "
+                                         f"as target path '{target_path}' does not exist! Skipping this file...")
+                            continue
+                        logger.debug(f"{action.name}: {source} -> {target}")
+                        transfer_dialog.setLabelText(f"{action.name}: \n{source} \n->\n {target}")
+                        # Allow repainting etc.
+                        QCoreApplication.processEvents()
+                        # SH OPERATION
+                        if not self.dry_run_checkbox.isChecked():
+                            try:
+                                if action == ActionKeys.copy:
+                                    shutil.copy2(source, target)
+                                    self.table.remove_file(source)
+                                elif action == ActionKeys.move:
+                                    shutil.move(source, target)
+                                    self.table.remove_file(source)
+                                else:
+                                    logger.error("Unknown Action! " + str(action))
+                                    break
+                            except IOError as e:
+                                logger.error(f"{action} error: {e}")
+                    if transfer_dialog.wasCanceled():
+                        logger.info("User aborted operation")
+                        break
+
+                self.file_operation_selector.selected_operation().save_state()
+                if self.delete_source_checkbox.checkState() == Qt.Checked:
+                    for _dir in source_dirs:
+                        if not os.listdir(_dir):
+                            logger.info(f"Directory {_dir} is empty. Attempting to delete it")
+                            # SH OPERATION
+                            if not self.dry_run_checkbox.isChecked():
+                                os.rmdir(_dir)
+                            logger.info(f"Directory {_dir} is empty. Attempting to delete it - Done")
+                        else:
+                            logger.info(f"Directory {_dir} is not empty, so will not delete it")
+
+    def _create_transfer_dialog(self, action, file_count):
         transfer_dialog = QProgressDialog()
         transfer_dialog.setWindowModality(Qt.WindowModal)
         transfer_dialog.setWindowTitle(action + " Files")
         transfer_dialog.setCancelButtonText("Abort")
         transfer_dialog.setValue(0)
-        transfer_dialog.setMaximum(len(file_items))
+        transfer_dialog.setMaximum(file_count)
         transfer_dialog.setMinimumWidth(550)
         transfer_dialog.setMaximumWidth(self.minimumWidth())
         transfer_dialog.show()
-        source_dirs = set()
-        for item in file_items:
-            source = item[DisplayKeys.source]
-            source_dirs.add(os.path.dirname(source))
-            target = item[DisplayKeys.target]
-            transfer_dialog.setValue(transfer_dialog.value() + 1)
-            if self.table.is_selected(source):
-                logger.debug(f"{action}: {source} -> {target}")
-                transfer_dialog.setLabelText(f"{action}: \n{source} \n->\n {target}")
-                # Allow repainting etc.
-                QCoreApplication.processEvents()
-                if action == ActionKeys.copy.value:
-                    shutil.copy(source, target)
-                    self.table.remove_file(source)
-                elif action == ActionKeys.move.value:
-                    shutil.move(source, target)
-                    self.table.remove_file(source)
-                else:
-                    logger.error("Unknown Action! " + action)
-            if transfer_dialog.wasCanceled():
-                logger.info("User aborted operation")
-                break
-        self.key_token_string.blockSignals(True)
-        self.key_token_string.addItem(self.key_token_string.currentText())
-        self.key_token_string.blockSignals(False)
-
-        # Delete Source dirs
-        if self.delete_source_checkbox.checkState() == Qt.Checked:
-            for _dir in source_dirs:
-                if not os.listdir(_dir):
-                    logger.info(f"Directory {_dir} is empty. Attempting to delete it")
-                    os.rmdir(_dir)
-                    logger.info(f"Directory {_dir} is empty. Attempting to delete it - Done")
-                else:
-                    logger.info(f"Directory {_dir} is not empty, so will not delete it")
+        return transfer_dialog
 
 
 def main():
     app = QApplication(sys.argv)
-    # app.setStyleSheet("QGroupBox {  border: 1px solid gray;}")
     ex = FileWranglerApp()
     sys.exit(app.exec_())
 

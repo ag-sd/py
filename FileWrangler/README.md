@@ -1,0 +1,6 @@
+- [x] Adjust content margins in control box
+- [ ] Does not honor nested directories
+- [x] Save state in each operation
+- [x] Theme and Icon
+- [x] From Directory names operation
+- [ ] Add tests
