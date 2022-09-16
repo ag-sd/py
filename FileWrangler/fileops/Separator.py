@@ -34,7 +34,6 @@ def get_context(file_sep: str, new_sep: str, repeat: int) -> dict:
 
 
 class SeparatorUIOperation(RenameUIOperation):
-    # {del}/{0} in {1}/{del}
 
     def __init__(self):
         super().__init__(name=NAME, description=DESCRIPTION)

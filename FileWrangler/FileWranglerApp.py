@@ -13,23 +13,21 @@ from CustomUI import FileChooserTextBox, DropZone
 from FileWrangler import logger, FileWranglerCore
 from FileWrangler.FileWranglerCore import ActionKeys, DisplayKeys, ConfigKeys, create_merge_tree, SortBy
 from FileWrangler.UIComponents import MainTable, FileOperationSelector
-from Theme import Theme
 
 
 class FileWranglerApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.theme = Theme(default_theme_dir=os.path.join(os.path.dirname(__file__), "resources/theme"))
 
         self.targetDir = FileChooserTextBox("Destination: ", "Select destination directory", True)
 
         # File Copy Operations
         self.move_button = QPushButton(ActionKeys.move.value)
-        self.move_button.setIcon(self.theme.fromTheme("edit-move"))
+        self.move_button.setIcon(FileWrangler.theme.fromTheme("edit-move"))
         self.copy_button = QPushButton(ActionKeys.copy.value)
-        self.copy_button.setIcon(self.theme.fromTheme("edit-copy"))
+        self.copy_button.setIcon(FileWrangler.theme.fromTheme("edit-copy"))
         self.help_button = QPushButton(ActionKeys.help.value)
-        self.help_button.setIcon(self.theme.fromTheme("help-contents"))
+        self.help_button.setIcon(FileWrangler.theme.fromTheme("help-contents"))
 
         # File Name Operations
         self.date_checkbox = QCheckBox("Append Date (YYYY.MM.DD) to destination file")
@@ -83,7 +81,7 @@ class FileWranglerApp(QMainWindow):
 
         self.help_button.setMaximumHeight(self.file_operation_selector.height())
 
-        self.setWindowIcon(self.theme.fromTheme("app_icon", use_system_fallback=False))
+        self.setWindowIcon(FileWrangler.theme.fromTheme("app_icon", use_system_fallback=False))
         self.setWindowTitle('File Wrangler')
         self.setMinimumWidth(1724)
         self.setMinimumHeight(768)
@@ -158,6 +156,7 @@ class FileWranglerApp(QMainWindow):
         op = self.file_operation_selector.selected_operation()
         op.merge_event.connect(self.create_merge)
         self.file_operations_widget.layout().setCurrentIndex(self.file_operation_selector.currentIndex())
+        self.create_merge()
 
     def create_merge(self):
         if self.file_operation_selector.selected_operation() is None:

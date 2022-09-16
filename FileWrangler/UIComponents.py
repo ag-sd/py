@@ -1,9 +1,12 @@
 import os
+from enum import Enum
 
-from PyQt5.QtCore import Qt, QMimeDatabase, QSize
-from PyQt5.QtGui import QIcon, QBrush, QColor
-from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QComboBox
+from PyQt5.QtCore import Qt, QMimeDatabase
+from PyQt5.QtGui import QIcon, QBrush, QColor, QCursor
+from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QComboBox, QMenu
 
+import CommonUtils
+import FileWrangler
 from FileWrangler import logger, FileWranglerCore
 from FileWrangler.FileWranglerCore import DisplayKeys
 
@@ -48,6 +51,13 @@ class FileOperationSelector(QComboBox):
     #     painter.restore()
 
 
+class TableActions(Enum):
+    Delete = 0,
+    Select = 4
+    Unselect = 1,
+    Clear = 3
+
+
 class MainTable(QTableWidget):
     _error_brush = QBrush(QColor(220, 20, 60, 75))
     _mime_database = QMimeDatabase()
@@ -69,6 +79,7 @@ class MainTable(QTableWidget):
         self.setSortingEnabled(True)
         self.reset()
         self.model = None
+        self.menu = self._create_context_menu()
 
     def is_selected(self, source_file):
         matches = self.findItems(source_file, Qt.MatchExactly)
@@ -112,6 +123,10 @@ class MainTable(QTableWidget):
         self.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
         self.setColumnWidth(0, first_column_width)
 
+    def contextMenuEvent(self, event):
+        if self.selectedIndexes() and self.selectedIndexes()[0].row() >= 0:
+            self.menu.exec(QCursor.pos())
+
     def _reset(self):
         self.clear()
         self.setColumnCount(2)
@@ -119,3 +134,36 @@ class MainTable(QTableWidget):
         self.setHorizontalHeaderItem(1, QTableWidgetItem("Destination File"))
         self.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+
+    def _create_context_menu(self):
+        menu = QMenu()
+        menu.addAction(CommonUtils.create_action(self, TableActions.Delete.name, self._menu_item_selected,
+                                                 icon=FileWrangler.theme.fromTheme("edit-clear")))
+        menu.addAction(CommonUtils.create_action(self, TableActions.Select.name, self._menu_item_selected,
+                                                 icon=FileWrangler.theme.fromTheme("list-add")))
+        menu.addAction(CommonUtils.create_action(self, TableActions.Unselect.name, self._menu_item_selected,
+                                                 icon=FileWrangler.theme.fromTheme("list-remove")))
+        menu.addAction(CommonUtils.create_action(self, TableActions.Clear.name, self._menu_item_selected,
+                                                 icon=FileWrangler.theme.fromTheme("edit-delete")))
+
+        return menu
+
+    def _menu_item_selected(self, item_value):
+        rows = set()
+        for selected in self.selectedIndexes():
+            rows.add(selected.row())
+        match TableActions[item_value]:
+            case TableActions.Delete:
+                for selected in self.selectedIndexes():
+                    self.removeRow(selected.row())
+            case TableActions.Unselect:
+                for selected in self.selectedItems():
+                    selected.setCheckState(Qt.Unchecked)
+            case TableActions.Select:
+                for selected in self.selectedItems():
+                    selected.setCheckState(Qt.Checked)
+            case TableActions.Clear:
+                self._reset()
+            case _:
+                logger.error("Unexpected Tableaction received")
+

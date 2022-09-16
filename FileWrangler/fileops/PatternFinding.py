@@ -4,6 +4,7 @@ from enum import Enum
 
 from PyQt5.QtWidgets import QComboBox, QBoxLayout, QLabel, QHBoxLayout, QCheckBox, QVBoxLayout, QWidget
 
+from FileWrangler import FileWranglerCore
 from FileWrangler.FileWranglerCore import ConfigKeys, RenameUIOperation
 
 """
@@ -87,6 +88,21 @@ _RE_MARKER_MATCH = re.compile(f"{_MARKER_BEG_}[0-9]+{_MARKER_END_}")
 
 _RE_TOKEN_MATCH = re.compile(f"{_MARKER_BEG_}[0-9]+{_MARKER_END_}|{_MARKER_BEG_}del{_MARKER_END_}")
 _RE_TOKEN_GROUP = re.compile("(.+)")
+
+_SAVED_SOURCE_TEMPLATES = [
+    "{del}/{0} in {1}/{del}",
+    "{del}/{0} - {1}/{del}",
+    "{0} - {1}"
+]
+
+_SAVED_TARGET_TEMPLATES = [
+    "{0} - {1}"
+]
+
+_SAVED_TARGET_SPLITTERS = [
+    FileWranglerCore.DEFAULT_SPLITTER,
+    "-"
+]
 
 
 class ChangeStrategy(Enum):
@@ -214,7 +230,10 @@ class PatternExtractingUIOperation(RenameUIOperation):
     def __init__(self):
         super().__init__(name=NAME, description=DESCRIPTION)
         self.key_template = self._get_editable_combo()
+        self.key_template.addItems([e for e in _SAVED_SOURCE_TEMPLATES])
         self.key_token = self._get_editable_combo()
+        self.key_token.addItems([e for e in _SAVED_TARGET_TEMPLATES])
+        self.key_token.addItems([e for e in _SAVED_TARGET_SPLITTERS])
         self.replacement_option = QComboBox()
         self.replacement_option.addItems([e.value for e in ChangeStrategy])
         self.exclude_dir_path = QCheckBox("Exclude directory path in format lookup")
@@ -256,7 +275,7 @@ class PatternExtractingUIOperation(RenameUIOperation):
     def get_context(self) -> dict:
         source_template = self.key_template.currentText()
         target_template = self.key_token.currentText()
-        change_strategy = self.ChangeStrategy(self.replacement_option.currentText())
+        change_strategy = ChangeStrategy(self.replacement_option.currentText())
         target_splitter = self.key_token.currentText()
 
         return create_context(src_template=source_template, tgt_template=target_template,
