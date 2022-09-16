@@ -89,20 +89,29 @@
     },
     "URL": {
         "Youtube-dl": {
-            "Extract Audio Mp3 High 170 to 210 kBits" : {
+            "Extract Audio Mp3 High 170 to 210 kBits": {
                 "extension": "",
                 "executable": "youtube-dl-ffmpeg",
                 "command": "--sleep-interval 5 --max-sleep-interval 15 --add-metadata -o - | ffmpeg -hide_banner -loglevel repeat+verbose -y -i pipe: -codec:a libmp3lame -qscale:a 2"
             },
-            "Extract Audio Very High 220 to 260 kBits" : {
+            "Extract Audio Very High 220 to 260 kBits": {
                 "extension": "",
                 "executable": "youtube-dl-ffmpeg",
                 "command": "--sleep-interval 5 --max-sleep-interval 15 --add-metadata -o - | ffmpeg -hide_banner -loglevel repeat+verbose -y -i pipe: -codec:a libmp3lame -qscale:a 0"
             },
-            "Extract Video" : {
+            "Extract Video": {
                 "extension": "",
                 "executable": "youtube-dl",
                 "command": "-no-continue --add-metadata --sleep-interval 5 --max-sleep-interval 15 -o "
+            }
+        }
+    },
+    "File": {
+        "Mp3": {
+            "Copy File": {
+                "extension": ".mp3",
+                "executable": "copy",
+                "command": ""
             }
         }
     }

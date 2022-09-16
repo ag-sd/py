@@ -32,7 +32,7 @@ class FileCopyProcessRunner(ProcessRunner):
         super().__init__(**kwargs)
 
     def run(self):
-        shutil.copy(src=self.input_file, dst=self.output_file, follow_symlinks=True)
+        shutil.copy2(src=self.input_file, dst=self.output_file, follow_symlinks=True)
         self.update_status(self.input_file, 100, 100)
 
 
