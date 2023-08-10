@@ -13,3 +13,18 @@
 - [ ] Add a small display on the thumbnail: format, resolution and size
 - [ ] Add which program is used to open a container### Changelog
 - [ ] Fix groups shouldn't disapear if only one image remains after a move
+
+mogrify -auto-level -colorspace Gray -resize 50x50! -path y/ *.jpg
+
+mogrify -auto-level -resize 50x50! -path y/ *histogram.jpg
+
+magick 20230406_082110.jpg  -define histogram:unique-colors=false histogram:20230406_082110_histogram.jpg
+
+Create Fingerprint
+mogrify -auto-level -colorspace Gray -resize 50x50! -path y/ *.jpg
+Create Histogram
+magick 20230406_082110.jpg  -define histogram:unique-colors=false histogram:20230406_082110_histogram.jpg
+mogrify -auto-level -resize 50x50! -path y/ *histogram.jpg
+Generate Fingerprint StringMap
+Generate Histogram StringMap
+Levenshtein Distance between the 2
