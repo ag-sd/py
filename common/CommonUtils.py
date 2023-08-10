@@ -7,7 +7,7 @@ import subprocess
 from functools import partial
 from os import path
 
-from PyQt5.QtCore import QObject, pyqtSignal, QSettings, QThread, QThreadPool, QRunnable, QTimer
+from PyQt5.QtCore import QObject, pyqtSignal, QSettings, QThread, QThreadPool, QRunnable, QTimer, QCoreApplication
 from PyQt5.QtWidgets import QCheckBox, QRadioButton, QGroupBox, QWidget, QSplitter, QAction
 
 from common.CustomUI import FileChooserTextBox
@@ -433,30 +433,40 @@ class CommandExecutionFactory(QThread):
     def do_work(self):
         if len(self.pending_jobs) > 0:
             if self.stop:
-                self.log("Stop has been received. Waiting for threads to finish before exiting...")
+                self.log(f"Stop has been received. Waiting for threads to finish before exiting... {self.check_thread()}")
                 self.thread_pool.waitForDone()
                 self.log(f"Waiting for {self.total_jobs - len(self.pending_jobs) - len(self.completed)} "
-                         f"threads to finish")
+                         f"threads to finish {self.check_thread()}")
                 if (self.total_jobs - len(self.pending_jobs) - len(self.completed)) == 0:
                     self.finish_event.emit(self.completed, sum(self.completed))
+                self.check_thread()
                 return
             active_threads = self.thread_pool.activeThreadCount()
             available_threads = self.max_threads - active_threads
             for i in range(0, min(available_threads, len(self.pending_jobs))):
-                self.log("Dispatching thread on empty slot...")
+                self.log(f"Dispatching thread on empty slot... {self.check_thread()}")
                 runnable = self.pending_jobs.pop()
                 runnable.signals.__complete__.connect(self.thread_complete)
                 runnable.setAutoDelete(True)
                 # Execute
                 self.thread_pool.start(runnable)
         else:
-            self.log("Waiting for threads to finish")
+            self.log(f"Waiting for threads to finish {self.check_thread()}")
             if len(self.completed) == self.total_jobs:
                 total_time = sum(self.completed)
-                self.log(f"Done. Total work completed in...{total_time}")
+                self.log(f"Done. Total work completed in...{total_time} {self.check_thread()}")
                 self.finish_event.emit(self.completed, total_time)
+
+    def check_thread(self):
+        # https://stackoverflow.com/questions/58511891/qthreadcreate-running-on-ui-thread
+        if QCoreApplication.instance().thread() == self.currentThread():
+            return "UI Thread in use!!!"
+        else:
+            return "Worker thread in use"
 
     def log(self, message):
         if self.logger:
             self.logger.info(message)
+        else:
+            print(f"No Logger Set!!: {message}")
 
