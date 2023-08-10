@@ -1,38 +1,19 @@
+import datetime
 import json
 import sqlite3
 from collections import defaultdict
-import datetime
 
 import MediaLib
-import MediaMetaData
+from MediaLib.runtime.library.Domain import TaskStatus, FileRecord
 from MediaMetaData import MetaDataFields
 
 
-class FileRecord:
-    def __init__(self, file, metadata=None, cataloged=None, catalog_updated=None):
-        super(FileRecord, self).__init__()
-        self.file = file
-        self.metadata = metadata if metadata is not None else MediaMetaData.get_metadata(file, include_checksum=True)
-        self.cataloged = cataloged if cataloged is not None else datetime.datetime.now()
-        self.catalog_updated = catalog_updated
-
-    def __repr__(self):
-        return f"file:{self.file}\nmetadata:{self.metadata}"
-
-    def __eq__(self, other):
-        if isinstance(other, FileRecord):
-            return self.file == other.file and \
-                   self.metadata[MetaDataFields.filesize] == other.metadata[MetaDataFields.filesize] and \
-                   self.metadata[MetaDataFields.checksum] == other.metadata[MetaDataFields.checksum]
-        else:
-            return False
-
-
-def delete_files(library, files, db_conn):
+def delete_files(library, files, db_conn, task):
     """
     Deletes the specified files from the database
     """
-    MediaLib.logger.info(f"About to delete {len(files)} records from the library {library.name}")
+    task.log_and_save(TaskStatus.Running,
+                      f"About to delete {len(files)} records from the library {library.name}", db_conn)
     filez = list(map(lambda x: x.file, files))
     batches = [filez[x:x + __LIB_BATCH_SIZE] for x in range(0, len(filez), __LIB_BATCH_SIZE)]
 
@@ -44,7 +25,7 @@ def delete_files(library, files, db_conn):
             db_conn.execute(sql, batch)
         db_conn.execute('commit')
     except sqlite3.Error as e:
-        MediaLib.logger.error(f"Unable to delete files from library because of the error {e}")
+        task.log_and_save(TaskStatus.Failed, f"Unable to delete files because of the error {e}", db_conn)
         db_conn.execute("rollback")
 
     MediaLib.logger.info(f"Files deleted")
@@ -84,7 +65,7 @@ def get_files(library, db_conn):
     return db_files
 
 
-def insert_files(library, files, db_conn):
+def insert_files(library, files, db_conn, task):
     """
     Inserts the specified files into the database
     """
@@ -94,6 +75,8 @@ def insert_files(library, files, db_conn):
         MediaLib.logger.debug(f"Inserting block of {len(_inserts)} records")
         db_conn.executemany(__LIB_INSERT_SQL, _inserts)
 
+    task.log_and_save(TaskStatus.Running,
+                      f"About to insert {len(files)} records into library {library.name}", db_conn)
     db_conn.execute("begin")
     try:
         for file in files:
@@ -115,7 +98,8 @@ def insert_files(library, files, db_conn):
             do_insert(inserts)
         db_conn.execute('commit')
     except sqlite3.Error as e:
-        MediaLib.logger.error(f"Unable to insert files into library because of the error {e}")
+        task.log_and_save(TaskStatus.Running,
+                          f"Unable to insert files into library because of the error {e}", db_conn)
         db_conn.execute("rollback")
 
 

@@ -5,39 +5,11 @@ import random
 import shutil
 import sqlite3
 import tempfile
-from collections import defaultdict
 
+import CommonUtils
 import MediaLib
-from CommonUtils import FileScanner
 from MediaLib.runtime.library import FileManagement
-
-
-class Library:
-    def __init__(self, name, types, dirs, created=None, updated=None):
-        self.name = name
-        self.types = types
-        self.dirs = dirs
-        self.created = created if created is not None else datetime.datetime.now()
-        self.updated = updated if updated is not None else datetime.datetime.now()
-
-    def get_db_params(self):
-        return self.name, "|".join(self.types), "|".join(self.dirs), self.created, self.updated
-
-    @staticmethod
-    def from_database_record(lib_record):
-        """
-            Extracts data from a library record
-            :param lib_record: a db row that represents a library
-            :return: a dict representing the library
-            """
-        return Library(
-            name=lib_record[0],
-            types=lib_record[1].split('|'),
-            dirs=lib_record[2].split('|'),
-            created=lib_record[3],
-            updated=lib_record[4]
-        )
-
+from MediaLib.runtime.library.Domain import Library, Task, TaskStatus
 
 __LIB_SELECT_STATEMENT = "SELECT name, type, dirs, created, updated from library "
 __LIB_CREATE_STATEMENT = "INSERT INTO library (name, type, dirs, created, updated) VALUES (?, ?, ?, ?, ?) "
@@ -46,7 +18,7 @@ __LIB_DELETE_STATEMENT = "DELETE FROM library where name=?"
 
 def reset_database(db_path):
     """
-    Will create a new library from the template
+        Will create a new library from the template
     """
     if os.path.exists(db_path):
         os.remove(db_path)
@@ -55,9 +27,9 @@ def reset_database(db_path):
 
 def get_library(library_name):
     """
-    Returns details about a library
-    :param library_name:
-    :return: Library details in a dictionary
+        Returns details about a library
+        :param library_name:
+        :return: Library details in a dictionary
     """
     conn = db.cursor()
     lib = conn.execute(f"{__LIB_SELECT_STATEMENT} WHERE name = ?", [library_name]).fetchone()
@@ -73,39 +45,40 @@ def get_all_libraries():
         Returns a list of all libraries in the database
         :return: a Dictionary of supported types with a list of libraries per type
     """
-    result_dict = defaultdict(list)
+    rez = []
     conn = db.cursor()
     results = conn.execute(f"{__LIB_SELECT_STATEMENT} ORDER BY type")
     for row in results:
-        result_dict[row[1]].append(Library.from_database_record(row))
+        rez.append(Library.from_database_record(row))
     conn.close()
-    return result_dict
+    return rez
 
 
-def create_library(library_name, library_types, dirs_in_library):
+def create_library(library, task):
     """
         Creates a library of the given name and type.
 
         Note: Will throw an error if the library already exists. It is the responsibility
         of the calling method to determine if a library with the same name exists
     """
-    MediaLib.logger.info(f"Creating library name={library_name} of types={library_types} with dirs={dirs_in_library}")
     conn = db.cursor()
+    task.log_and_save(status=TaskStatus.Running,
+                      message=f"Creating library name={library.name} of types={library.types} "
+                              f"with dirs={library.dirs}", db_conn=conn)
 
     # Step 1: First create the library entry
-    lib = Library(name=library_name, types=library_types, dirs=dirs_in_library)
-    conn.execute(__LIB_CREATE_STATEMENT, lib.get_db_params())
+    conn.execute(__LIB_CREATE_STATEMENT, library.get_db_params())
 
+    task.log_and_save(status=TaskStatus.Running, message=f"Created library {library.name}", db_conn=conn)
     conn.close()
-    MediaLib.logger.info(f"Created library {library_name}")
 
     # Step 2: Refresh the library
-    refresh_library(lib)
+    refresh_library(library, task)
 
 
-def delete_library(library, skip_file_deletes=False):
-    MediaLib.logger.info(f"Deleting {library.name}")
+def delete_library(library, task, skip_file_deletes=False):
     conn = db.cursor()
+    task.log_and_save(status=TaskStatus.Running, message=f"Deleting {library.name}", db_conn=conn)
     conn.execute("begin")
     try:
         # Step 1: Delete all files from the library
@@ -117,101 +90,102 @@ def delete_library(library, skip_file_deletes=False):
 
         # Step 3: Commit
         conn.execute('commit')
-        MediaLib.logger.info(f"Library deleted")
+        task.log_and_save(TaskStatus.Complete, f"Library deleted", conn)
     except sqlite3.Error as e:
-        MediaLib.logger.error(f"Unable to delete library because of the error {e}")
+        task.log_and_save(TaskStatus.Failed, f"Unable to delete library because of the error {e}", conn)
         conn.execute("rollback")
 
     conn.close()
 
 
-def delete_from_library(library, files):
-    conn = db.cursor() # TODO FIXME Use With
-    FileManagement.delete_files(library, files, conn)
+def delete_from_library(library, files, task):
+    conn = db.cursor()  # TODO FIXME Use With
+    FileManagement.delete_files(library, files, conn, task)
     conn.close()
 
 
-def rebuild_library(library):
+def rebuild_library(library, task):
     # Step 1: Delete the library, but not the files
-    delete_library(library, skip_file_deletes=True)
+    delete_library(library, task, skip_file_deletes=True)
 
     # Step 2: Refresh the library
-    create_library(library.name, library.types, library.dirs)
+    create_library(library, task)
 
 
-def refresh_library(library):
+def refresh_library(library, task):
     """
-    Updates a library by adding new files, removing non-existent files
-    and updating changed files
-    :param library: The library to update
+        Updates a library by adding new files, removing non-existent files
+        and updating changed files
+    :param library:
+    :param task
     :return:
     """
-    MediaLib.logger.info(f"Refreshing {library.name}")
     conn = db.cursor()
+    task.log_and_save(status=TaskStatus.Running, message=f"Refreshing {library.name}", db_conn=conn)
 
     # Step 1: Get files in library that are in the database
     db_files = {}
     for file in get_files_in_library(library):
         db_files[file.file] = file
+    task.log_and_save(status=TaskStatus.Running, message="DB files fetched...", db_conn=conn)
 
-    MediaLib.logger.debug("DB files fetched...")
-
-    # Step 2: Get the files of this library from the filesystem
-    MediaLib.logger.debug("Scanning files in filesystem...")
-    # TODO: Option to not exclude any file type
-    scanner = FileScanner(library.dirs, recurse=True, partial_mimetypes_list=library.types, is_qfiles=False)
+    task.log_and_save(status=TaskStatus.Running, message="Scanning filesystem now...", db_conn=conn)
+    scanner = CommonUtils.FileScanner(library.dirs, recurse=True,
+                                      partial_mimetypes_list=[t.name for t in library.types], is_qfiles=False)
     MediaLib.logger.debug(f"Will scan for the following extensions: {scanner.supported_extensions}")
-    fs_files = scanner.files
-    rejects = scanner.rejected_files
+    task.log_and_save(status=TaskStatus.Running, message="Filesystem scan complete", db_conn=conn)
 
-    MediaLib.logger.debug("Comparing files now...")
-    # Step 3: Compare the 2 data-sets and identify inserts, updates and deletes
+    # Step 2: Compare the 2 data-sets and identify inserts, updates and deletes
     updates = []
     inserts = []
     deletes = []
     counter = 0
-    for file_p in fs_files:
+    f_count = len(scanner.files)
+
+    for file_p in scanner.files:
         file = FileManagement.FileRecord(file_p, metadata=None)
-        if file_p in db_files:
-            if not db_files[file_p].__eq__(file):
+        if file.file in db_files:
+            if not db_files[file.file].__eq__(file):
                 deletes.append(file)
                 file.catalog_updated = datetime.datetime.now()
                 updates.append(file)
-                db_files.pop(file_p)
+                db_files.pop(file.file)
             else:
                 # file unchanged. Leave it as is
-                db_files.pop(file_p)
+                db_files.pop(file.file)
         else:
             # New File
             inserts.append(file)
+        counter += 1
+        if counter % 5 == 0:
+            pct = counter * 100 / f_count
+            task.log_and_save(status=TaskStatus.Running, message=f"Completed {pct}", db_conn=conn, percent=pct)
 
-        counter = counter + 1
     # What is left in the db needs to be deleted as it was not found in the filesystem
     for f in db_files.values():
         deletes.append(f)
 
-    MediaLib.logger.info(f"{len(updates)} files to be updated in library")
+    task.log_and_save(status=TaskStatus.Running, message=f"{len(updates)} files to be updated", db_conn=conn)
     if len(updates):
         MediaLib.logger.debug("******* Updated Files ******* \n" + "\n".join([e.file for e in updates]) + "\n\n")
-    MediaLib.logger.info(f"{len(inserts)} files to be inserted in library")
+
+    task.log_and_save(status=TaskStatus.Running, message=f"{len(inserts)} files to be added", db_conn=conn)
     if len(inserts):
         MediaLib.logger.debug("******* Inserted Files ******* \n" + "\n".join([e.file for e in inserts]) + "\n\n")
-    MediaLib.logger.info(f"{len(deletes)} files to be deleted from library")
+
+    task.log_and_save(status=TaskStatus.Running, message=f"{len(deletes)} files to be deleted", db_conn=conn)
     if len(deletes):
         MediaLib.logger.debug("******* Deleted Files ******* \n" + "\n".join([e.file for e in deletes]) + "\n\n")
-    MediaLib.logger.info(f"{len(rejects)} files to be excluded from library")
-    if len(rejects):
-        MediaLib.logger.debug("******* Rejected Files ******* \n" + "\n".join(rejects) + "\n\n")
 
-    # Step 5: Insert the data
-    FileManagement.delete_files(library, deletes, conn)
+    # Step 3: Insert the data
+    FileManagement.delete_files(library, deletes, conn, task)
     MediaLib.logger.info("Obsolete files deleted")
 
-    FileManagement.insert_files(library, inserts + updates, conn)
+    FileManagement.insert_files(library, inserts + updates, conn, task)
     MediaLib.logger.info("Updated files added")
 
+    task.log_and_save(status=TaskStatus.Complete, message="Scan completed", db_conn=conn)
     conn.close()
-    MediaLib.logger.info("Complete")
 
 
 def get_files_in_library(library):
@@ -227,8 +201,45 @@ def close_database():
     MediaLib.logger.info(f"Committed and closed {MediaLib.__APP_NAME__} library")
 
 
-atexit.register(close_database)
+# ------------------------ ----------------------------- ------------------------ #
+# ------------------------ # TASK MANAGEMENT FUNCTIONS # ------------------------ #
+# ------------------------ ----------------------------- ------------------------ #
 
+__LIB_TASK_SELECT_STATEMENT = "select status, message, event_time, percent from tasks " \
+                              "where task_id = ? order by seq_id desc limit 1"
+
+__LIB_TASK_SELECT_CURRENTLY_RUNNING = "select distinct task_id from tasks t where not exists " \
+                                      "(select 1 from tasks ti where ti.task_id = t.task_id " \
+                                      "and ti.status in ('Complete', 'Failed'))"
+
+
+def get_task(task_id):
+    conn = db.cursor()
+    result = conn.execute(__LIB_TASK_SELECT_STATEMENT, [task_id]).fetchone()
+    conn.close()
+    return Task(
+        task_id=task_id,
+        status=TaskStatus[result[0]],
+        message=result[1],
+        event_time=datetime.datetime.fromisoformat(result[2]),
+        percent=result[3],
+    )
+
+
+def get_currently_running_tasks():
+    conn = db.cursor()
+    tasks = conn.execute(__LIB_TASK_SELECT_CURRENTLY_RUNNING).fetchall()
+    conn.close()
+    return [get_task(task[0]) for task in tasks]
+
+
+def save_task(task):
+    conn = db.cursor()
+    task.log_and_save(status=task.status, message=task.message, db_conn=conn, percent=task.percent)
+    conn.close()
+
+
+atexit.register(close_database)
 
 if __name__ != '__main__':
     if not os.path.exists(MediaLib.db_path):
@@ -249,34 +260,36 @@ else:
     db.isolation_level = None
 
     MediaLib.logger.info("Test : Create a library of type audio, video, images")
-    create_library(library_name="lib_test", library_types=["audio", "video", "image"],
-                   dirs_in_library=["/mnt/Dev/testing"])
+    _task = Task("Test : Create a library of type audio, video, images")
+    create_library(Library(name="lib_test", types=[LibraryType.Audio, LibraryType.Video, LibraryType.Image],
+                           dirs=["/mnt/Dev/testing"]), task=_task)
 
     MediaLib.logger.info("Test : Get library")
     _library = get_library("lib_test")
-    assert(_library.name == "lib_test")
+    assert (_library.name == "lib_test")
 
     MediaLib.logger.info("Test : Get all libraries")
     _all = get_all_libraries()
     assert len(_all) == 1
 
     MediaLib.logger.info("Test : Delete a few files from the library")
+    _task = Task("Test : Delete a few files from the library")
     _db_files = get_files_in_library(_library)
     _dels = random.choices(_db_files, k=4)
-    delete_from_library(_library, _dels)
+    delete_from_library(_library, _dels, _task)
     _db_files_post_dels = get_files_in_library(_library)
-    assert(len(_db_files) - 4 == len(_db_files_post_dels))
+    assert (len(_db_files) - 4 == len(_db_files_post_dels))
     for d in _dels:
         assert d not in _db_files_post_dels
 
     MediaLib.logger.info("Test : Refresh the library")
-    refresh_library(_library)
+    _task = Task("Test : Refresh the library")
+    refresh_library(_library, _task)
     _db_files_post_refresh = get_files_in_library(_library)
     assert (len(_db_files) - 4 == len(_db_files_post_dels))
 
     MediaLib.logger.info("Test : Delete the library")
-    delete_library(_library, skip_file_deletes=False)
+    _task = Task("Test : Delete the library")
+    delete_library(_library, _task, skip_file_deletes=False)
     assert get_library("lib_test") is None
     assert len(get_files_in_library(_library)) == 0
-
-
