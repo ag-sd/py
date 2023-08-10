@@ -272,7 +272,10 @@ class FileItemModel(QAbstractTableModel):
             return value
 
         header = self.columnHeaders[column]
-        self.file_items.sort(key=sorter, reverse=False if order == Qt.AscendingOrder else True)
+        try:
+            self.file_items.sort(key=sorter, reverse=False if order == Qt.AscendingOrder else True)
+        except TypeError:
+            pass
         self.dataChanged.emit(QModelIndex(), QModelIndex())
         self.sort_column = column
         self.sort_order = order
