@@ -209,6 +209,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
-    # HistogramGenerator("/home/sheldon/Desktop/to-dedup/x/20230406_082110.jpg").run()
+    # main()
+    HistogramGenerator("/mnt/dev/testing/duplo/Samples/SIMILAR_IMG_5244.JPG").run()
+    HistogramGenerator("/mnt/dev/testing/duplo/Samples/SIMILAR_IMG_5245.JPG").run()
     # MetaImageGenerator("/home/sheldon/Desktop/to-dedup/x/20230406_082110.jpg").run()
