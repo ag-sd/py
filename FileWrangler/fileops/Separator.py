@@ -64,7 +64,7 @@ class SeparatorUIOperation(RenameUIOperation):
         self._save_combo_current_text(self.file_separator)
         self._save_combo_current_text(self.new_separator)
 
-    def _get_key(self, file, config) -> str:
+    def _get_source_key(self, file, config) -> str:
         context = config[ConfigKeys.context]
         return get_key(file, context)
 

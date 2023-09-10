@@ -11,6 +11,7 @@ from CommonUtils import FileScanner
 from FileWrangler import logger
 
 UNKNOWN_KEY = "Unknown"
+CTX_FILE_SEPARATOR = "File_Separator"
 DEFAULT_SPLITTER = " - "
 EMPTY_STR = ""
 _DEFAULT_REGEX = ".+?(?= - )"
@@ -118,7 +119,7 @@ def _create_destination_keymap(files, config):
     for file in files:
         if file == EMPTY_STR:
             continue
-        key = _create_key(file, config)
+        key = _create_key(file, config, is_destination=True)
         _, file_name = os.path.split(file)
         if file_name.startswith(key):
             _update_dict(file, _dict, key)
@@ -132,17 +133,17 @@ def _update_dict(file, _dict, key):
         _dict[key] = [file]
 
 
-def _create_key(file, config):
+def _create_key(file, config, is_destination=False):
     if ConfigKeys.is_version_2 in config:
-        return _create_key_v2(file, config)
+        return _create_key_v2(file, config, is_destination)
     else:
         raise NotImplementedError("V1 is discontinued")
 
 
-def _create_key_v2(file, config):
+def _create_key_v2(file, config, is_destination=False):
     operation = config[ConfigKeys.operation]
     try:
-        key_base = operation.get_key(file, config)
+        key_base = operation.get_key(file, config, is_destination=is_destination)
     except Exception as e:
         logger.exception("Something awful happened!")
         traceback.print_exc()
@@ -181,18 +182,22 @@ class RenameUIOperation(QObject):
         """
         pass
 
-    def get_key(self, file_name, config) -> str:
+    def get_key(self, file_name, config, is_destination=False) -> str:
         """
         Returns the key of the file with the given config.context
         Args:
             file_name: The filename
             config: The config to use
+            is_destination: True if the key is being extracted for a file in the destination, in which case the
+            key may need to be extracted differently
 
         Returns: A key based on the config.context and file
 
         """
         self.validate_correct_operation(op_name=self.name, key_type=config[ConfigKeys.key_type])
-        return self._get_key(file_name, config)
+        if is_destination:
+            return self._get_destination_key(file_name, config)
+        return self._get_source_key(file_name, config)
 
     def get_help(self):
         """
@@ -214,7 +219,7 @@ class RenameUIOperation(QObject):
 
     def save_state(self):
         """
-        Convenience function to enable file oeprations to save their state for next time.
+        Convenience function to enable file operations to save their state for next time.
         Note, states are not saved across sessions
         Returns: Nothing
 
@@ -224,17 +229,32 @@ class RenameUIOperation(QObject):
     def _get_layout(self) -> QBoxLayout:
         pass
 
-    def _get_key(self, file_name, config) -> str:
+    def _get_source_key(self, file_name, config) -> str:
         """
         Returns the key of the file with the given config.context
         Args:
             file_name: The filename
             config: The config to use
-
         Returns: A key based on the config.context and file
 
         """
         pass
+
+    def _get_destination_key(self, file_name, config):
+        """
+        Extracts the destination key with the given config.context
+        Args:
+            file_name: The filename
+            config: The config to use
+        Returns: A key based on the config.context and file
+        """
+        context = config[ConfigKeys.context]
+        file_splitter = context[CTX_FILE_SEPARATOR]
+        idx = file_name.rfind(file_splitter)
+        if idx >= 0:
+            return file_name[:idx]
+        else:
+            logger.warn(f"Unable to find index in file name {file_name}. Returning {file_name} as key")
 
     def _emit_merge_event(self):
         self.merge_event.emit(0)

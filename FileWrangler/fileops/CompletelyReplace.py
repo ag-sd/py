@@ -36,7 +36,7 @@ class CompletelyReplaceUIOperation(RenameUIOperation):
     def save_state(self):
         self._save_combo_current_text(self.key_token_string)
 
-    def _get_key(self, file, config) -> str:
+    def _get_source_key(self, file, config) -> str:
         return get_key(file, config[FileWranglerCore.ConfigKeys.context])
 
     def _get_layout(self) -> QBoxLayout:

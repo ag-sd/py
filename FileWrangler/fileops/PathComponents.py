@@ -64,7 +64,7 @@ class PathComponentsUIOperation(RenameUIOperation):
     def save_state(self):
         self._save_combo_current_text(self.file_separator)
 
-    def _get_key(self, file, config) -> str:
+    def _get_source_key(self, file, config) -> str:
         return get_key(file, config[ConfigKeys.context])
 
     def _get_layout(self) -> QBoxLayout:
