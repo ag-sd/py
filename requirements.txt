@@ -50,7 +50,7 @@ setproctitle==1.1.10
 simplejson==3.13.2
 six==1.11.0
 update-checker==0.16
-urllib3==1.25.8
+urllib3==1.26.5
 uTidylib==0.3
 webencodings==0.5
 WebOb==1.7.3
