@@ -7,17 +7,17 @@ from PyQt5 import QtCore
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QProgressBar, QLabel, QPushButton, QMessageBox
 
-import CommonUtils
 import TransCoda
-from CustomUI import QVLine
 from TransCoda.core import TransCodaHistory
+from TransCoda.core.Encoda import EncoderCommand, EncoderStatus
 from TransCoda.core.MetaDataOperations import FileMetaDataExtractor
 from TransCoda.ui import TransCodaSettings
-from TransCoda.core.Encoda import EncoderCommand, EncoderStatus
-from TransCoda.ui.TransCodaSettings import SettingsKeys
 from TransCoda.ui.Actions import MainToolBar, Action
 from TransCoda.ui.MainPanel import MainPanel
 from TransCoda.ui.TerminalView import TerminalView
+from TransCoda.ui.TransCodaSettings import SettingsKeys
+from common import CommonUtils
+from common.CustomUI import QVLine
 
 
 class TransCodaApp(QMainWindow):
@@ -181,8 +181,9 @@ class TransCodaApp(QMainWindow):
         self.executor.start()
 
     def reset_timer(self):
-        if self.timer.isActive() and not self.executor.is_running():
-            self.timer.stop()
+        if self.executor is not None:
+            if self.timer.isActive() and not self.executor.is_running():
+                self.timer.stop()
         self.timer.start()
 
     def result_received_event(self, result):

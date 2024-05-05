@@ -8,7 +8,7 @@ from datetime import datetime
 from enum import Enum
 from shutil import which
 
-import CommonUtils
+from common import CommonUtils
 
 _MISSING_DATA = "Not Available"
 # http://www.imagemagick.org/script/identify.php
