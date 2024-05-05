@@ -4,7 +4,7 @@ from enum import Enum
 
 from PyQt5.QtWidgets import QComboBox, QBoxLayout, QLabel, QHBoxLayout, QCheckBox, QVBoxLayout, QWidget
 
-from FileWrangler import FileWranglerCore
+from FileWrangler import FileWranglerCore, std_separator
 from FileWrangler.FileWranglerCore import ConfigKeys, RenameUIOperation
 
 """
@@ -79,6 +79,7 @@ KEY_SOURCE_TOKENS = "Source_Tokens"
 KEY_SOURCE_GROUPS = "Source_Groups"
 KEY_CONFIG_DIR_EX = "Exclude_Directory"
 KEY_CONFIG_EXT_EX = "Exclude_Extension"
+KEY_FILE_SEPARATOR = "File_Separator"
 
 _MARKER_BEG_ = "{"
 _MARKER_END_ = "}"
@@ -146,7 +147,8 @@ def create_context(src_template: str, tgt_template: str,
         KEY_CHANGE_STRATEGY: change_mode,
 
         KEY_TARGET_TEMPLATE: tgt_template,
-        KEY_TARGET_SPLITTER: splitter
+        KEY_TARGET_SPLITTER: splitter,
+        KEY_FILE_SEPARATOR: std_separator
     }
 
 

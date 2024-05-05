@@ -1,11 +1,12 @@
 from PyQt5.QtWidgets import QLabel, QHBoxLayout, QBoxLayout
 
-from FileWrangler import logger, FileWranglerCore
+from FileWrangler import logger, FileWranglerCore, std_separator
 from FileWrangler.FileWranglerCore import RenameUIOperation
 
 NAME = "Completely Replace"
 DESCRIPTION = "Completely replace the filename with the new value provided."
 KEY_TOKEN = "Token"
+KEY_FILE_SEPARATOR = "File_Separator"
 
 
 def get_key(_, context) -> str:
@@ -14,7 +15,8 @@ def get_key(_, context) -> str:
 
 def get_context(replacement_text: str) -> dict:
     return {
-        KEY_TOKEN: replacement_text
+        KEY_TOKEN: replacement_text,
+        KEY_FILE_SEPARATOR: std_separator
     }
 
 

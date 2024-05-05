@@ -3,16 +3,17 @@ import shutil
 import sys
 from functools import partial
 
-from PyQt5.QtCore import Qt, QCoreApplication
+from PyQt5.QtCore import Qt, QCoreApplication, QTimer
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QHBoxLayout, \
     QCheckBox, QLabel, QProgressDialog, \
     QRadioButton, QGroupBox, QStackedLayout, QMessageBox
 
 import FileWrangler
-from CustomUI import FileChooserTextBox, DropZone
+
 from FileWrangler import logger, FileWranglerCore
 from FileWrangler.FileWranglerCore import ActionKeys, DisplayKeys, ConfigKeys, create_merge_tree, SortBy
 from FileWrangler.UIComponents import MainTable, FileOperationSelector
+from common.CustomUI import FileChooserTextBox, DropZone
 
 
 class FileWranglerApp(QMainWindow):
@@ -38,6 +39,7 @@ class FileWranglerApp(QMainWindow):
         self.file_operation_selector.setEditable(False)
         self.dry_run_checkbox = QCheckBox("Dry Run")
         self.dry_run_checkbox.setChecked(True)
+        self.fill_gaps_checkbox = QCheckBox("Fill Gaps")
 
         # File Display Operations
         self.sort_name = QRadioButton("Name")
@@ -60,6 +62,7 @@ class FileWranglerApp(QMainWindow):
         self.targetDir.file_selection_changed.connect(self.create_merge)
         self.date_checkbox.stateChanged.connect(self.create_merge)
         self.delete_source_checkbox.stateChanged.connect(self.create_merge)
+        self.fill_gaps_checkbox.stateChanged.connect(self.create_merge)
         self.file_operation_selector.currentIndexChanged.connect(self._create_file_operation_widget)
         self.sort_date.released.connect(partial(self.create_merge))
         self.sort_name.released.connect(partial(self.create_merge))
@@ -114,9 +117,10 @@ class FileWranglerApp(QMainWindow):
             operation_layout.setContentsMargins(0, 0, 0, 0)
 
             additional_file_operations = QHBoxLayout()
-            additional_file_operations.addWidget(QWidget(), stretch=1)
             additional_file_operations.addWidget(self.date_checkbox)
             additional_file_operations.addWidget(self.delete_source_checkbox)
+            additional_file_operations.addWidget(QWidget(), stretch=1)
+            additional_file_operations.addWidget(self.fill_gaps_checkbox)
 
             control_layout = QVBoxLayout()
             control_layout.setContentsMargins(0, 0, 0, 0)
@@ -180,7 +184,9 @@ class FileWranglerApp(QMainWindow):
             ConfigKeys.key_type: self.file_operation_selector.selected_operation().name,
             ConfigKeys.context: self.file_operation_selector.selected_operation().get_context(),
             ConfigKeys.is_version_2: True,
-            ConfigKeys.operation: self.file_operation_selector.selected_operation()
+            ConfigKeys.operation: self.file_operation_selector.selected_operation(),
+            ConfigKeys.fill_gaps: self.fill_gaps_checkbox.isChecked()
+
         }
 
         try:
@@ -198,7 +204,9 @@ class FileWranglerApp(QMainWindow):
             case _:
                 # Disable any input operations
                 file_items = self.table.model
-                transfer_dialog = self._create_transfer_dialog(action.name, len(file_items))
+                total_items = len(file_items)
+                completed_items = 1
+                transfer_dialog = self._create_transfer_dialog(action.name, total_items)
                 source_dirs = set()
                 for item in file_items:
                     source = item[DisplayKeys.source]
@@ -211,8 +219,14 @@ class FileWranglerApp(QMainWindow):
                             logger.error(f"CANNOT {action.name.upper()}: {source} -> {target} "
                                          f"as target path '{target_path}' does not exist! Skipping this file...")
                             continue
-                        logger.debug(f"{action.name}: {source} -> {target}")
-                        transfer_dialog.setLabelText(f"{action.name}: \n{source} \n->\n {target}")
+                        # Prevent Overwrites
+                        if os.path.exists(target):
+                            logger.error(f"CANNOT {action.name.upper()}: {source} -> {target} "
+                                         f"as target file '{target}' exists! Skipping this file...")
+                            continue
+                        logger.debug(f"{action.name} ({completed_items} / {total_items}) : {source} -> {target}")
+                        transfer_dialog.setLabelText(f"{action.name}\n({completed_items} / {total_items})"
+                                                     f"\n{source} \n->\n {target}")
                         # Allow repainting etc.
                         QCoreApplication.processEvents()
                         # SH OPERATION
@@ -232,6 +246,7 @@ class FileWranglerApp(QMainWindow):
                     if transfer_dialog.wasCanceled():
                         logger.info("User aborted operation")
                         break
+                    completed_items += 1
 
                 self.file_operation_selector.selected_operation().save_state()
                 if self.delete_source_checkbox.checkState() == Qt.Checked:

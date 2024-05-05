@@ -1,18 +1,17 @@
 import os
 import re
-import traceback
 from datetime import datetime
 from enum import Enum
 
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtWidgets import QBoxLayout, QComboBox, QWidget
 
-from CommonUtils import FileScanner
-from FileWrangler import logger
+from FileWrangler import logger, std_separator
+from common.CommonUtils import FileScanner
 
 UNKNOWN_KEY = "Unknown"
 CTX_FILE_SEPARATOR = "File_Separator"
-DEFAULT_SPLITTER = " - "
+DEFAULT_SPLITTER = std_separator
 EMPTY_STR = ""
 _DEFAULT_REGEX = ".+?(?= - )"
 
@@ -29,6 +28,7 @@ class ConfigKeys(Enum):
     context = 7
     is_version_2 = 8
     operation = 9
+    fill_gaps = 10
 
 
 class SortBy(Enum):
@@ -74,16 +74,56 @@ def create_merge_tree(files, target_directory, config):
 
     # For each source file:
     for file in _sort_files(source_scanner.files, config):
-        # Update reference dict for file
-        key = _create_key(file, config)
-        _update_dict(file, reference_keys, key)
         key = _create_key(file, config)
         _, ext = os.path.splitext(file)
-        file_model.append({
-            DisplayKeys.source: file,
-            DisplayKeys.target: os.path.join(target_directory, f"{key} - {len(reference_keys[key])}{ext}")
-        })
+        file_model.append(_get_target_file(source_file=file, target_directory=target_directory,
+                                           reference_keys=reference_keys, file_key=key, file_ext=ext, config=config))
     return file_model
+
+
+def _get_target_file(source_file: str, target_directory: str, reference_keys: dict,
+                     file_key: str, file_ext: str, config: dict) -> dict:
+    if config[ConfigKeys.fill_gaps]:
+        target_file = _get_next_gap_in_sequence(target_directory=target_directory,
+                                                file_key=file_key, file_ext=file_ext,
+                                                target_files=
+                                                reference_keys[file_key] if file_key in reference_keys else [])
+        if target_file is None:
+            target_file = _get_next_file_in_sequence(target_directory=target_directory,
+                                                     file_key=file_key, file_ext=file_ext,
+                                                     target_files=
+                                                     reference_keys[file_key] if file_key in reference_keys else [])
+    else:
+        target_file = _get_next_file_in_sequence(target_directory=target_directory,
+                                                 file_key=file_key, file_ext=file_ext,
+                                                 target_files=
+                                                 reference_keys[file_key] if file_key in reference_keys else [])
+    # Update reference dict for target_file so that it is accounted for in subsequent iterations
+    _update_dict(target_file, reference_keys, file_key)
+    return {
+        DisplayKeys.source: source_file,
+        DisplayKeys.target: target_file
+    }
+
+
+def _get_next_gap_in_sequence(target_directory: str, target_files: list, file_key: str, file_ext: str):
+    for i in range(1, len(target_files)):
+        target_file = os.path.join(target_directory, f"{file_key} - {i}{file_ext}")
+        if target_file not in target_files:
+            return target_file
+    return None
+
+
+def _get_next_file_in_sequence(target_directory: str, target_files: list, file_key: str, file_ext: str):
+    curr_max = 0
+    for file in target_files:
+        _, file_name = os.path.split(file)
+        file_name_tokens = file_name.split(DEFAULT_SPLITTER)
+        string_index_value = ''.join(filter(lambda x: x.isdigit(), file_name_tokens[-1]))
+        file_index = 1 if string_index_value == EMPTY_STR else int(string_index_value)
+        if file_index > curr_max:
+            curr_max = file_index
+    return os.path.join(target_directory, f"{file_key} - {curr_max + 1}{file_ext}")
 
 
 def _sort_files(files, config):
@@ -144,9 +184,8 @@ def _create_key_v2(file, config, is_destination=False):
     operation = config[ConfigKeys.operation]
     try:
         key_base = operation.get_key(file, config, is_destination=is_destination)
-    except Exception as e:
+    except Exception:
         logger.exception("Something awful happened!")
-        traceback.print_exc()
         key_base = UNKNOWN_KEY
 
     if ConfigKeys.append_date in config:
@@ -182,11 +221,11 @@ class RenameUIOperation(QObject):
         """
         pass
 
-    def get_key(self, file_name, config, is_destination=False) -> str:
+    def get_key(self, file, config, is_destination=False) -> str:
         """
         Returns the key of the file with the given config.context
         Args:
-            file_name: The filename
+            file: The full file path
             config: The config to use
             is_destination: True if the key is being extracted for a file in the destination, in which case the
             key may need to be extracted differently
@@ -196,8 +235,8 @@ class RenameUIOperation(QObject):
         """
         self.validate_correct_operation(op_name=self.name, key_type=config[ConfigKeys.key_type])
         if is_destination:
-            return self._get_destination_key(file_name, config)
-        return self._get_source_key(file_name, config)
+            return self._get_destination_key(file, config)
+        return self._get_source_key(file, config)
 
     def get_help(self):
         """
@@ -240,16 +279,17 @@ class RenameUIOperation(QObject):
         """
         pass
 
-    def _get_destination_key(self, file_name, config):
+    def _get_destination_key(self, file, config):
         """
         Extracts the destination key with the given config.context
         Args:
-            file_name: The filename
+            file: The filename
             config: The config to use
         Returns: A key based on the config.context and file
         """
         context = config[ConfigKeys.context]
         file_splitter = context[CTX_FILE_SEPARATOR]
+        _, file_name = os.path.split(file)
         idx = file_name.rfind(file_splitter)
         if idx >= 0:
             return file_name[:idx]
