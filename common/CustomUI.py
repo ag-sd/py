@@ -20,22 +20,20 @@ class FileChooserTextBox(QWidget):
 
     file_selection_changed = pyqtSignal(str)
 
-    def __init__(self, label, cue, _dir, lbl_align_right=False, initial_selection=''):
+    def __init__(self, label, cue, _dir, lbl_align_right=False, initial_selection='', text_box_editable=False):
         super(FileChooserTextBox, self).__init__()
         self.label = label
         self.cue = cue
         self.dir = _dir
-        if path.exists(initial_selection):
-            self.selection = initial_selection
-        else:
-            self.selection = ""
+        self.text_editable = text_box_editable
+        self.setSelection(initial_selection)
         self.text = QLineEdit()
         self.lbl_align_right = lbl_align_right
         self.initUI()
 
     def initUI(self):
-        self.text.setReadOnly(True)
-        self.text.setObjectName("txtAddress")
+        self.text.setReadOnly(not self.text_editable)
+        self.text.textChanged.connect(self.text_changed)
         button = QPushButton("...")
         button.clicked.connect(self.browse_for_item)
         width = button.fontMetrics().boundingRect("...").width() + 12
@@ -62,17 +60,18 @@ class FileChooserTextBox(QWidget):
         else:
             file, _filter = QFileDialog.getOpenFileName(self, self.cue, initial_dir)
 
-        self.selection = QDir.toNativeSeparators(file)
-        self.text.setText(self.selection)
-        self.file_selection_changed.emit(self.selection)
+        self.text.setText(QDir.toNativeSeparators(file))
 
     def getSelection(self):
-        return self.selection
+        return self.text.text()
 
     def setSelection(self, selection):
         if path.exists(selection):
-            self.selection = selection
             self.text.setText(selection)
+
+    def text_changed(self):
+        if path.exists(self.text.text()):
+            self.file_selection_changed.emit(self.text.text())
 
 
 class DropZone(QLabel):
