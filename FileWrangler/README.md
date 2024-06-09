@@ -4,3 +4,7 @@
 - [x] Theme and Icon
 - [x] From Directory names operation
 - [ ] Add tests
+- [ ] Move existing file config to general settings panel
+- [ ] Ignore hidden files  // Add to a general settings Panel
+- [ ] Ignore Extensions    // Add to a general settings Panel 
+- [ ] Fix File removal     // Add to a general settings Panel

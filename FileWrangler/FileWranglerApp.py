@@ -3,13 +3,12 @@ import shutil
 import sys
 from functools import partial
 
-from PyQt5.QtCore import Qt, QCoreApplication, QTimer
+from PyQt5.QtCore import Qt, QCoreApplication
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QHBoxLayout, \
     QCheckBox, QLabel, QProgressDialog, \
     QRadioButton, QGroupBox, QStackedLayout, QMessageBox
 
 import FileWrangler
-
 from FileWrangler import logger, FileWranglerCore
 from FileWrangler.FileWranglerCore import ActionKeys, DisplayKeys, ConfigKeys, create_merge_tree, SortBy
 from FileWrangler.UIComponents import MainTable, FileOperationSelector
@@ -20,7 +19,8 @@ class FileWranglerApp(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.targetDir = FileChooserTextBox("Destination: ", "Select destination directory", True)
+        self.targetDir = FileChooserTextBox("Destination: ", "Select destination directory", True,
+                                            text_box_editable=True)
 
         # File Copy Operations
         self.move_button = QPushButton(ActionKeys.move.value)
