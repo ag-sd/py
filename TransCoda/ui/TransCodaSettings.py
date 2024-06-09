@@ -6,9 +6,9 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QDialog, QCheckBox, QDialogButtonBox, QLabel, QVBoxLayout, QSpinBox, QHBoxLayout, QLineEdit
 
 import TransCoda
-from CommonUtils import AppSettings, CommandExecutionFactory
-from CustomUI import FileChooserTextBox, QHLine
 from TransCoda.ui import TransCodaEditor
+from common.CommonUtils import AppSettings, CommandExecutionFactory
+from common.CustomUI import FileChooserTextBox, QHLine
 
 
 @unique
