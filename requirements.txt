@@ -30,7 +30,7 @@ prawcore==0.8.0
 psutil==5.4.2
 pycairo==1.16.2
 pycrypto==2.6.1
-Pygments==2.2.0
+Pygments==2.7.4
 pygobject==3.26.1
 pyOpenSSL==17.5.0
 pyparsing==2.2.0
