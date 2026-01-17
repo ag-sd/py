@@ -17,7 +17,7 @@ idna==2.9
 ipaddress==1.0.17
 keyring==10.6.0
 keyrings.alt==3.0
-lxml==4.2.1
+lxml==4.9.1
 Markdown==2.6.9
 mechanize==0.2.5
 msgpack==0.5.6
