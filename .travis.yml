@@ -1,8 +1,14 @@
 language: python
+
 python:
-    - "3.6"
-# command to install dependencies
+  - "3.10"
+  - "3.11"
+  - "3.12"
+
+# Install dependencies from pyproject.toml
 install:
-  - pip install -r requirements.txt
+  - pip install --upgrade pip
+  - pip install -e ".[all,dev]"
+
 script:
-  python -m unittest discover -p "Test*.py"
+  - pytest

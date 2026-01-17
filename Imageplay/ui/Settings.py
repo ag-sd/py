@@ -7,8 +7,8 @@ from PyQt5.QtWidgets import QDialog, QSpinBox, QCheckBox, QVBoxLayout, QLabel, Q
     QHBoxLayout, QLineEdit
 
 import Imageplay
-from CommonUtils import AppSettings
-from CustomUI import QHLine
+from common.CommonUtils import AppSettings
+from common.CustomUI import QHLine
 
 
 @unique

@@ -4,7 +4,7 @@ import sys
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QMainWindow, QMessageBox, QApplication
 
-import CommonUtils
+from common import CommonUtils
 import Imageplay
 from Imageplay.core.Playlist import Playlist, PlaylistCompleteException
 from Imageplay.ui import Settings

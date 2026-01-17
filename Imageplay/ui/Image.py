@@ -8,9 +8,9 @@ from PyQt5.QtGui import QPixmap, QPalette, QMovie, QImageReader
 from PyQt5.QtWidgets import QDialog, QVBoxLayout
 from PyQt5.QtWidgets import QScrollArea, QApplication, QLabel
 
-import CommonUtils
+from common import CommonUtils
+from common import MediaMetaData
 import Imageplay
-import MediaMetaData
 from Imageplay.ui import Settings
 
 SUPPORTED_FORMATS = list(map(lambda x: f'.{str(x, "utf-8").upper()}', QImageReader.supportedImageFormats()))

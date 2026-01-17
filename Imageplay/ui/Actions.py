@@ -4,7 +4,7 @@ from PyQt5.QtCore import pyqtSignal, QSize
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QToolBar, QWidget, QSizePolicy
 
-import CommonUtils
+from common import CommonUtils
 from Imageplay.ui import Settings
 
 

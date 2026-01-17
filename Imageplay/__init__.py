@@ -27,12 +27,7 @@
 # for _format in QImageReader.supportedImageFormats():
 #     supported_formats.append(f".{str(_format, encoding='ascii').upper()}")
 
-import os
-import sys
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '../common/'))
-sys.path.append(os.path.join(os.path.dirname(__file__), '../'))
-import CommonUtils
+from common import CommonUtils
 
 __VERSION__ = "0.1.0"
 __NAME__ = "ImagePlay"
