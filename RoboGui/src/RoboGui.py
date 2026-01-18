@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (QWidget,
                              QPushButton,
                              QMessageBox)
 
-from CustomUI import FileChooserTextBox
+from common.CustomUI import FileChooserTextBox
 from RobocopySwitches import allSwitches
 from Utils import CommandRunner
 
