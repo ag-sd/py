@@ -3,7 +3,7 @@ from PyQt5.QtGui import QCursor
 from PyQt5.QtWidgets import QTableView, QAbstractItemView, QMenu, QStyledItemDelegate, \
     QStyleOptionProgressBar, QApplication, QStyle
 
-import CommonUtils
+from common import CommonUtils
 import TransCoda
 from TransCoda.ui import TransCodaSettings
 from TransCoda.ui.Actions import Action

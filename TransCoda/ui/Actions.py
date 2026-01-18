@@ -3,7 +3,7 @@ from enum import Enum
 from PyQt5.QtCore import pyqtSignal, QSize
 from PyQt5.QtWidgets import QToolBar
 
-import CommonUtils
+from common import CommonUtils
 import TransCoda
 from TransCoda.core.Encoda import EncoderStatus
 

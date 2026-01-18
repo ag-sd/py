@@ -9,9 +9,9 @@ from PyQt5.QtWidgets import QDialog, QApplication, QTreeView, QComboBox, QHBoxLa
     QStyle, QStyleOptionComboBox, QLineEdit, QGroupBox, QLabel, QWidget, \
     QGridLayout, QToolBar, QVBoxLayout, QDialogButtonBox
 
-import CommonUtils
+from common import CommonUtils
 import TransCoda
-from CustomUI import QHLine
+from common.CustomUI import QHLine
 
 
 def get_config_file():

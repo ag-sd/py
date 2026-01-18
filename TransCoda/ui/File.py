@@ -4,7 +4,7 @@ from enum import Enum
 
 from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, QVariant, QMimeDatabase
 
-import CommonUtils
+from common import CommonUtils
 import TransCoda
 from TransCoda.core.Encoda import EncoderStatus
 from TransCoda.ui import TransCodaSettings
@@ -195,7 +195,7 @@ class FileItem:
             self.output_file = os.path.join(output_dir, file)
         elif self.encoder_props["extension"] == "":
             self.output_file = os.path.join(output_dir, name)
-            TransCoda.logger.warn(f"Encoder props do no specify file extension. "
+            TransCoda.logger.warning(f"Encoder props do no specify file extension. "
                                   f"Encoder is expected to create the output file in {self.output_file}")
         else:
             self.output_file = os.path.join(output_dir, name + self.encoder_props["extension"])

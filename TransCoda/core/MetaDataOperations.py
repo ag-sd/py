@@ -2,10 +2,10 @@ import os
 
 from PyQt5.QtCore import QUrl
 
-import CommonUtils
-import MediaMetaData
+from common import CommonUtils
+from common import MediaMetaData
 import TransCoda
-from MediaMetaData import MetaDataFields
+from common.MediaMetaData import MetaDataFields
 from TransCoda.core import TransCodaHistory
 from TransCoda.core.Encoda import EncoderStatus
 from TransCoda.ui.File import FileItem, Header
@@ -101,7 +101,7 @@ class FileMetaDataExtractor(CommonUtils.Command):
                         elif url.authority() != "":
                             item_list.append(FileItem(file=file, url=line))
         except (UnicodeDecodeError, OSError):
-            TransCoda.logger.warn(f"Could not open/read file:{file}. Transcoda will skip this file")
+            TransCoda.logger.warning(f"Could not open/read file:{file}. Transcoda will skip this file")
             item_to_remove.status = EncoderStatus.ERROR
             item_list = [item_to_remove]
             return item_list

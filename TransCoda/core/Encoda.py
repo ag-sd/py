@@ -2,7 +2,7 @@ import datetime
 import os
 from enum import Enum
 
-import CommonUtils
+from common import CommonUtils
 import TransCoda
 from TransCoda.ui import TransCodaSettings
 from TransCoda.core import ProcessRunners

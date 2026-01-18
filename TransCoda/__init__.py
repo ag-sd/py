@@ -1,10 +1,4 @@
-import os
-import sys
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '../common/'))
-sys.path.append(os.path.join(os.path.dirname(__file__), '../'))
-# needs to be imported after common paths are defined
-import CommonUtils
+from common import CommonUtils
 from TransCoda.ui.Theme import Theme
 
 __VERSION__ = "0.1.0"
