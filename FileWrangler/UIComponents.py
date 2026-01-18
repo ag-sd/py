@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt, QMimeDatabase
 from PyQt5.QtGui import QIcon, QBrush, QColor, QCursor
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QComboBox, QMenu
 
-import CommonUtils
+from common import CommonUtils
 import FileWrangler
 from FileWrangler import logger, FileWranglerCore
 from FileWrangler.FileWranglerCore import DisplayKeys

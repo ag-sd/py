@@ -3,7 +3,7 @@ from enum import Enum
 
 from PyQt5.QtGui import QIcon
 
-from CommonUtils import FileScanner
+from common.CommonUtils import FileScanner
 
 
 class _IconExtensions(Enum):

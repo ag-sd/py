@@ -294,7 +294,8 @@ class RenameUIOperation(QObject):
         if idx >= 0:
             return file_name[:idx]
         else:
-            logger.warn(f"Unable to find index in file name {file_name}. Returning {file_name} as key")
+            logger.warning(f"Unable to find index in file name {file_name}. Returning {file_name} as key")
+            return None
 
     def _emit_merge_event(self):
         self.merge_event.emit(0)
